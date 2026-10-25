@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A protest game against child abusers, snatchers and rapists in Bangladesh. Charge your force, nail the timing, punish harder each round. Log in to join the leaderboard.">
+<meta name="theme-color" content="#12221e">
+<title>Slap the Abuser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Hind+Siliguri:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/game.css">
+<link rel="stylesheet" href="css/social.css">
+</head>
+<body>
+
+<div class="top">
+  <div class="title">
+    <h1 id="h1">Slap the <em>Abuser</em></h1>
+    <span class="bn" id="tag">অপরাধীর বিচার চাই</span>
+  </div>
+  <div class="stats">
+    <span class="stat"><small>Score</small><b id="score">0</b></span>
+    <span class="stat"><small>Combo</small><b id="combo">×0</b></span>
+    <span class="stat"><small>Best</small><b id="best">0</b></span>
+    <span class="stat"><small>Lives</small><b id="lives">●●●</b></span>
+    <span class="chips">
+      <button class="chip" id="change" type="button">Villain</button>
+      <button class="chip" id="board" type="button">Board</button>
+      <button class="chip" id="account" type="button" aria-haspopup="dialog">Log in</button>
+      <button class="chip" id="mute" type="button">Sound on</button>
+    </span>
+  </div>
+</div>
+
+<div class="stage" id="stage">
+  <div class="frame" id="frame">
+    <canvas id="c" aria-label="Game screen"></canvas>
+    <div class="overlay" id="overlay">
+      <h2 id="ovTitle">Who gets punished?</h2>
+      <div id="ovBody" style="display:grid;gap:10px;justify-items:center;width:100%"></div>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <div class="spots" role="group" aria-label="Where to hit">
+    <button class="spot" type="button" data-spot="L">Left cheek<small>×1.0 · key 1</small></button>
+    <button class="spot" type="button" data-spot="R">Right cheek<small>×1.0 · key 2</small></button>
+    <button class="spot" type="button" data-spot="S" id="spotS">Back of head<small>×1.6 · key 3</small></button>
+  </div>
+  <button class="act" id="act" type="button">HOLD TO CHARGE</button>
+</div>
+
+<div id="live" class="sr-only" role="status" aria-live="polite"></div>
+
+<!-- Leaderboard / friends / account. All content is filled in with textContent (never innerHTML) by js/*.js -->
+<dialog id="social" aria-labelledby="socialTitle">
+  <div class="dlg-head">
+    <h2 id="socialTitle">Hall of Justice</h2>
+    <button class="chip" id="socialClose" type="button" aria-label="Close">✕</button>
+  </div>
+  <div class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" id="tab-board" aria-controls="panel-board" aria-selected="true" type="button">Leaderboard</button>
+    <button role="tab" id="tab-friends" aria-controls="panel-friends" aria-selected="false" type="button">Friends</button>
+    <button role="tab" id="tab-account" aria-controls="panel-account" aria-selected="false" type="button">Account</button>
+  </div>
+
+  <section id="panel-board" role="tabpanel" aria-labelledby="tab-board">
+    <div class="seg" role="group" aria-label="Board" id="scopeSeg">
+      <button type="button" data-scope="global" aria-pressed="true">Everyone</button>
+      <button type="button" data-scope="facebook" aria-pressed="false">Facebook friends</button>
+      <button type="button" data-scope="game" aria-pressed="false">Game friends</button>
+    </div>
+    <div class="seg" role="group" aria-label="Period" id="periodSeg">
+      <button type="button" data-period="daily" aria-pressed="false">Today</button>
+      <button type="button" data-period="weekly" aria-pressed="false">Week</button>
+      <button type="button" data-period="monthly" aria-pressed="false">Month</button>
+      <button type="button" data-period="all-time" aria-pressed="true">All time</button>
+    </div>
+    <label class="field-inline">Villain
+      <select id="villainSel">
+        <option value="">All</option>
+        <option value="abuser">Child Abuser</option>
+        <option value="robber">Snatcher</option>
+        <option value="rapist">Rapist</option>
+      </select>
+    </label>
+    <div id="boardState" class="state" role="status"></div>
+    <ol id="boardList" class="board"></ol>
+    <p id="boardMe" class="me-line"></p>
+    <button id="boardMore" class="ovbtn ghost small" type="button" hidden>Show more</button>
+  </section>
+
+  <section id="panel-friends" role="tabpanel" aria-labelledby="tab-friends" hidden>
+    <div id="friendsGuest" class="state">Log in to add friends and compare scores.</div>
+    <div id="friendsAuthed" hidden>
+      <p class="lead">Your friend code</p>
+      <div class="code-row"><output id="myCode" class="code">——</output><button class="chip" id="copyInvite" type="button">Copy invite link</button></div>
+      <form id="addFriend" class="row" autocomplete="off">
+        <label class="sr-only" for="friendCode">Friend code</label>
+        <input id="friendCode" name="friendCode" maxlength="16" placeholder="Friend code" autocapitalize="characters" spellcheck="false">
+        <button class="ovbtn small" type="submit">Add</button>
+      </form>
+      <p id="friendMsg" class="state" role="status"></p>
+      <h3>Requests</h3><ul id="requestList" class="plain"></ul>
+      <h3>Friends</h3><ul id="friendList" class="plain"></ul>
+    </div>
+  </section>
+
+  <section id="panel-account" role="tabpanel" aria-labelledby="tab-account" hidden>
+    <div id="acctGuest">
+      <p class="lead">Play as a guest, or log in to save scores, join the leaderboard and compare with friends. We only use your name (shortened) and profile picture.</p>
+      <button id="fbLogin" class="fb-btn" type="button">Continue with Facebook</button>
+      <p id="fbNote" class="state" role="status"></p>
+      <form id="devLogin" class="row" hidden>
+        <input id="devName" value="Dev Player" maxlength="30" aria-label="Dev player name">
+        <button class="ovbtn small" type="submit">Dev login (mock)</button>
+      </form>
+    </div>
+    <div id="acctAuthed" hidden>
+      <div class="who"><img id="acctAvatar" alt="" width="48" height="48" hidden><div><b id="acctName"></b><small id="acctSub"></small></div></div>
+      <dl id="acctStats" class="stats-grid"></dl>
+      <form id="nickForm" class="row">
+        <label class="sr-only" for="nickInput">Nickname</label>
+        <input id="nickInput" maxlength="24" placeholder="Nickname (shown on boards)">
+        <button class="ovbtn small" type="submit">Save</button>
+      </form>
+      <button id="fbFriendsBtn" class="chip wide" type="button" hidden>Enable Facebook friends board</button>
+      <p id="acctMsg" class="state" role="status"></p>
+      <div class="btnrow">
+        <button class="ovbtn ghost small" id="logoutBtn" type="button">Log out</button>
+        <button class="ovbtn ghost small danger" id="deleteBtn" type="button">Delete my account</button>
+      </div>
+    </div>
+    <p class="fine"><a href="privacy.html">Privacy &amp; data deletion</a></p>
+  </section>
+</dialog>
+
+<script src="js/config.js"></script>
+<script src="js/game.js"></script>
+<script type="module" src="js/game-integration.js"></script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+# Render Blueprint for the API. Secrets (sync: false) are entered in the Render dashboard, never committed.
+services:
+  - type: web
+    name: slap-the-abuser-api
+    runtime: node
+    rootDir: backend
+    plan: starter            # the free plan sleeps after ~15 min idle; see docs/deployment.md before using it for real users
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health/ready
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"
+      - key: LOG_LEVEL
+        value: info
+      - key: DATABASE_URL        # Neon POOLED connection string
+        sync: false
+      - key: FRONTEND_URL        # e.g. https://game.example.com
+        sync: false
+      - key: API_PUBLIC_URL      # e.g. https://api.example.com
+        sync: false
+      - key: FACEBOOK_APP_ID
+        sync: false
+      - key: FACEBOOK_APP_SECRET
+        sync: false
+      - key: FACEBOOK_GRAPH_API_VERSION
+        value: v25.0
+      - key: COOKIE_SAMESITE
+        value: lax
+      - key: SESSION_TTL_DAYS
+        value: "7"
+# Migrations are NOT run on deploy. Run them explicitly: see docs/deployment.md ("Releasing a schema change").
