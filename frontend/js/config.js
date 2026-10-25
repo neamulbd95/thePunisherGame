@@ -15,7 +15,7 @@
   };
 
   var production = {
-    API_BASE_URL: 'https://api.example.com/api/v1',   // PLACEHOLDER: your Render API (custom domain on the same site as the game)
+    API_BASE_URL: 'https://api.the-bangla-punisher.cc/api/v1',   // Render API on a subdomain of the game's domain (same site, so cookies work)
     FACEBOOK_APP_ID: '',                              // PLACEHOLDER: your Meta app id (public)
     FACEBOOK_GRAPH_API_VERSION: 'v25.0',
     DEV_MOCK_LOGIN: false
@@ -23,7 +23,7 @@
 
   // Facebook Login only works on domains registered in the Meta app. Cloudflare preview deployments
   // (*.pages.dev) are not registered, so login is disabled there instead of failing confusingly.
-  var FACEBOOK_ALLOWED_HOSTS = ['game.example.com'];   // PLACEHOLDER: your production game domain
+  var FACEBOOK_ALLOWED_HOSTS = ['the-bangla-punisher.cc'];   // hosts registered in the Meta app
 
   var cfg = isLocal ? local : production;
   cfg.FACEBOOK_LOGIN_ENABLED = !!cfg.FACEBOOK_APP_ID && (isLocal || FACEBOOK_ALLOWED_HOSTS.indexOf(host) !== -1);

@@ -1,0 +1,9 @@
+{
+  // Cloudflare Workers static assets: serves the plain HTML/CSS/JS in ./frontend (including its _headers file).
+  // "name" must match the project name shown in the Cloudflare setup screen.
+  "name": "thepunishergame",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./frontend"
+  }
+}
