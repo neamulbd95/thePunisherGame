@@ -16,7 +16,7 @@
 
   var production = {
     API_BASE_URL: 'https://api.the-bangla-punisher.cc/api/v1',   // Render API on a subdomain of the game's domain (same site, so cookies work)
-    FACEBOOK_APP_ID: '',                              // PLACEHOLDER: your Meta app id (public)
+    FACEBOOK_APP_ID: '2612995962475556',                              // PLACEHOLDER: your Meta app id (public)
     FACEBOOK_GRAPH_API_VERSION: 'v25.0',
     DEV_MOCK_LOGIN: false
   };
