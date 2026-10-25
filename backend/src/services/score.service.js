@@ -27,7 +27,7 @@ export function createScoreService({ db, logger, gamesRepo, leaderboardRepo }) {
           reason = 'villain_mismatch';
         } else {
           const rounds = body.rounds.map((r) => ({ spot: r.spot, grade: r.grade, force: r.force ?? 0 }));
-          result = replayRun({ rounds, claimedScore: body.score, durationMs });
+          result = replayRun({ rounds, claimedScore: body.score, durationMs, end: body.end, timeLeftMs: body.timeLeftMs });
           if (!result.ok) reason = result.reason;
         }
 

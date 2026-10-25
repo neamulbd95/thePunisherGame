@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import crypto from 'node:crypto';
-import { replayRun, roundScore, LIMITS } from '../src/utils/game-rules.js';
+import { replayRun, roundScore, timeBonus, LIMITS, STAGES, TIME_LIMIT_MS, TIME_BONUS_PER_SEC } from '../src/utils/game-rules.js';
 import { periodStart } from '../src/utils/periods.js';
 import { parseEnv } from '../src/config/env.js';
 import { createFacebookService, parseSignedRequest } from '../src/services/facebook.service.js';
-import { testEnv, makeRun } from './helpers.js';
+import { testEnv, makeRun, makeCleared } from './helpers.js';
 
 describe('scoring rules', () => {
   it('matches the client formula', () => {
@@ -35,9 +35,73 @@ describe('scoring rules', () => {
   });
 
   it('rejects an implausible perfect streak', () => {
-    const spec = Array.from({ length: LIMITS.maxPerfectStreak + 1 }, () => ['S', 'PERFECT', 1]);
+    const run = makeCleared({ spec: Array.from({ length: STAGES }, () => ['S', 'PERFECT', 1]), timeLeftMs: 20_000 });
+    expect(LIMITS.maxPerfectStreak).toBeLessThan(STAGES);
+    expect(replayRun({ ...run, claimedScore: run.score, durationMs: 90_000 }).reason).toBe('implausible_perfect_streak');
+  });
+
+  it('rejects more rounds than a game can contain', () => {
+    const spec = Array.from({ length: STAGES + 1 }, () => ['L', 'GOOD', 0.5]);
     const { rounds, score } = makeRun(spec);
-    expect(replayRun({ rounds, claimedScore: score, durationMs: rounds.length * 2000 }).reason).toBe('implausible_perfect_streak');
+    expect(replayRun({ rounds, claimedScore: score, durationMs: 999_999, end: 'lives' }).reason).toBe('too_many_rounds');
+  });
+});
+
+describe('stages and the clock', () => {
+  const replay = (run, durationMs, over = {}) => replayRun({ rounds: run.rounds, claimedScore: run.score, durationMs, end: run.end, timeLeftMs: run.timeLeftMs, ...over });
+
+  it('adds whole seconds left x bonus when all stages are cleared', () => {
+    const run = makeCleared({ timeLeftMs: 21_800 });
+    const r = replay(run, 40_000);
+    expect(r.ok).toBe(true);
+    expect(r.bonus).toBe(21 * TIME_BONUS_PER_SEC);
+    expect(r.score).toBe(run.score);
+    expect(timeBonus(21_999)).toBe(21 * TIME_BONUS_PER_SEC);
+  });
+
+  it('gives no bonus for losing all lives, even if the client claims time left', () => {
+    const { rounds, score } = makeRun();
+    expect(replayRun({ rounds, claimedScore: score, durationMs: 20_000, end: 'lives', timeLeftMs: 50_000 }).ok).toBe(true);
+    expect(replayRun({ rounds, claimedScore: score + 1000, durationMs: 20_000, end: 'lives', timeLeftMs: 50_000 }).reason).toBe('score_mismatch');
+  });
+
+  it('rejects a bonus the server clock contradicts', () => {
+    const run = makeCleared({ timeLeftMs: 50_000 }); // claims the game took 10 s ...
+    expect(replay(run, 10_500).ok).toBe(true); //        ... which fits 10 s of wall clock
+    expect(replay(run, 45_000).reason).toBe('time_mismatch'); // but not 45 s
+  });
+
+  it('rejects impossible time claims', () => {
+    expect(replay(makeCleared({ timeLeftMs: TIME_LIMIT_MS }), 30_000).reason).toBe('bad_time');
+    expect(replay(makeCleared({ timeLeftMs: 20_000 }), 30_000, { timeLeftMs: -5 }).reason).toBe('bad_time');
+    expect(replay(makeCleared({ timeLeftMs: 20_000 }), 30_000, { timeLeftMs: 12.5 }).reason).toBe('bad_time');
+  });
+
+  it('cleared needs exactly ten hits and fewer than three misses', () => {
+    const nine = makeCleared({ spec: Array.from({ length: STAGES - 1 }, () => ['L', 'GOOD', 0.6]), timeLeftMs: 20_000 });
+    expect(replay(nine, 30_000).reason).toBe('game_not_finished');
+  });
+
+  it('a clear may include up to two misses', () => {
+    const spec = [['L', 'GOOD', 0.7], ['L', 'MISS'], ...Array.from({ length: STAGES - 1 }, () => ['R', 'GREAT', 0.7]), ];
+    const run = makeCleared({ spec, timeLeftMs: 10_000 });
+    expect(replay(run, 25_000).ok).toBe(true);
+  });
+
+  it('accepts a timeout only once the clock could really have run out', () => {
+    const spec = [['L', 'GOOD', 0.5], ['R', 'GOOD', 0.5]];
+    const { rounds, score } = makeRun(spec, { lives: false });
+    const base = { rounds, claimedScore: score, end: 'timeout', timeLeftMs: 0 };
+    expect(replayRun({ ...base, durationMs: TIME_LIMIT_MS + 5_000 }).ok).toBe(true);
+    expect(replayRun({ ...base, durationMs: 20_000 }).reason).toBe('timeout_too_early');
+    // a run that was already over (three misses) cannot also be a timeout
+    const dead = makeRun(spec);
+    expect(replayRun({ rounds: dead.rounds, claimedScore: dead.score, end: 'timeout', durationMs: 90_000 }).reason).toBe('game_not_finished');
+  });
+
+  it('rejects unknown end reasons', () => {
+    const { rounds, score } = makeRun();
+    expect(replayRun({ rounds, claimedScore: score, durationMs: 20_000, end: 'quit' }).reason).toBe('bad_end');
   });
 });
 

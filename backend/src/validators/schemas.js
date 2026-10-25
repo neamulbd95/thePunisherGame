@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { VILLAINS } from '../utils/game-rules.js';
+import { VILLAINS, END_REASONS, STAGES, MAX_MISSES, TIME_LIMIT_MS } from '../utils/game-rules.js';
 import { PERIODS } from '../utils/periods.js';
 
 export const facebookLoginBody = z.strictObject({
@@ -21,7 +21,10 @@ const round = z.strictObject({
 export const completeGameBody = z.strictObject({
   score: z.number().int().min(0).max(5_000_000),
   villain: z.enum(VILLAINS),
-  rounds: z.array(round).min(3).max(400),
+  rounds: z.array(round).max(STAGES + MAX_MISSES),
+  // Defaults keep a browser that still has the previous front end cached working (those runs ended on lives).
+  end: z.enum(END_REASONS).default('lives'),
+  timeLeftMs: z.number().int().min(0).max(TIME_LIMIT_MS).default(0),
 });
 
 export const uuidParam = z.strictObject({ id: z.uuid() });

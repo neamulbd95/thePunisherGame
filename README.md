@@ -41,7 +41,7 @@ Open <http://localhost:5500>. In **Log in → Dev login (mock)** you can sign in
 
 ## How a score is protected
 
-The game is client-side, so a score can't be trusted on its own. The client sends the **round log** (spot, grade, force per swing); the server replays it with the same scoring formula, requires an exact match, checks the game really ended (3 misses), a minimum run time, and an implausible-perfect-streak heuristic, and stores one row per server-issued session. This stops casual tampering, **not** a determined cheater who automates the game — see [docs/security.md](docs/security.md).
+The game is client-side, so a score can't be trusted on its own. The client sends the **round log** (spot, grade, force per swing), how the game ended and the time left; the server replays it with the same scoring formula, requires an exact match, checks the game really ended (3 misses), a minimum run time, and an implausible-perfect-streak heuristic, and stores one row per server-issued session. This stops casual tampering, **not** a determined cheater who automates the game — see [docs/security.md](docs/security.md).
 
 ## Documentation
 

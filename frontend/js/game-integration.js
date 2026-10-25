@@ -191,7 +191,7 @@ function renderGameOver(result, game) {
     try {
       const r = await api(`/game-sessions/${s.sessionId}/complete`, {
         method: 'POST',
-        body: { score: result.score, villain: result.villain, rounds: result.rounds },
+        body: { score: result.score, villain: result.villain, rounds: result.rounds, end: result.end, timeLeftMs: result.timeLeftMs },
         timeoutMs: 15000,
       });
       status.textContent = `Saved! You are #${r.allTimeRank} on the all-time board${r.personalBest ? ' — a new personal best!' : '.'}`;

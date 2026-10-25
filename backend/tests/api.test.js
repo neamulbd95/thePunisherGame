@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import crypto from 'node:crypto';
-import { createTestDb, resetDb, buildApp, loginAs, playGame, makeRun, ageSession, testEnv, CSRF } from './helpers.js';
+import { createTestDb, resetDb, buildApp, loginAs, playGame, makeRun, makeCleared, ageSession, testEnv, CSRF } from './helpers.js';
 
 let db;
 let app;
@@ -232,6 +232,44 @@ describe('game sessions & score submission', () => {
     const res = await agent.post(`/api/v1/game-sessions/${start.body.data.sessionId}/complete`).set(CSRF).send({ villain: 'abuser', score, rounds, playerId: 'someone-else' });
     expect(res.status).toBe(422);
     expect((await agent.post('/api/v1/game-sessions/not-a-uuid/complete').set(CSRF).send({})).status).toBe(422);
+  });
+});
+
+describe('stages, clock and time bonus', () => {
+  it('stores a cleared game with its time bonus', async () => {
+    const { agent } = await loginAs(app, 'fb-1');
+    const run = makeCleared({ timeLeftMs: 21_500 }); // played in ~38.5 s
+    const { done } = await playGame(db, agent, { run, elapsedMs: 40_000 });
+    expect(done.status).toBe(200);
+    expect(done.body.data.score).toBe(run.score);
+    const row = (await db.query('SELECT score, rounds, validation_status FROM game_scores')).rows[0];
+    expect(row).toMatchObject({ score: run.score, rounds: 10, validation_status: 'accepted' });
+  });
+
+  it('rejects a forged time bonus on a cleared game', async () => {
+    const { agent } = await loginAs(app, 'fb-1');
+    const run = makeCleared({ timeLeftMs: 40_000 }); // claims 20 s of play, but the session is 60 s old
+    const { done } = await playGame(db, agent, { run, elapsedMs: 60_000 });
+    expect(done.status).toBe(422);
+    expect(done.body.error.details.reason).toBe('time_mismatch');
+  });
+
+  it('accepts a timeout and ignores any bonus claim', async () => {
+    const { agent } = await loginAs(app, 'fb-1');
+    const run = makeRun([['L', 'GOOD', 0.5], ['R', 'GOOD', 0.5]], { lives: false });
+    const { done } = await playGame(db, agent, { run: { ...run, timeLeftMs: 30_000 }, elapsedMs: 65_000 });
+    expect(done.status).toBe(200);
+    expect(done.body.data.score).toBe(run.score);
+  });
+
+  it('rejects an early "timeout" and unknown end reasons at the schema', async () => {
+    const { agent } = await loginAs(app, 'fb-1');
+    const run = makeRun([['L', 'GOOD', 0.5]], { lives: false });
+    const early = await playGame(db, agent, { run, elapsedMs: 15_000 });
+    expect(early.done.body.error.details.reason).toBe('timeout_too_early');
+    const start = await agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'abuser' });
+    const bad = await agent.post(`/api/v1/game-sessions/${start.body.data.sessionId}/complete`).set(CSRF).send({ villain: 'abuser', score: 0, rounds: [], end: 'quit' });
+    expect(bad.status).toBe(422);
   });
 });
 

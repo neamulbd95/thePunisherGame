@@ -39,6 +39,8 @@ const VILLAINS={
     intro:'The smug, "well-connected" criminal who thinks nothing will happen to him. Give him the jharu.'}
 };
 const GRADES=[{n:'PERFECT',f:.3,m:1.5,c:'#f2b134'},{n:'GREAT',f:.65,m:1.2,c:'#f4efe4'},{n:'GOOD',f:1,m:1,c:'#9fd3c0'}];
+// A session is STAGES successful hits against a clock. Keep these three in sync with backend/src/utils/game-rules.js.
+const STAGES=10,TIME_LIMIT_MS=60000,TIME_BONUS_PER_SEC=20;
 const bestKey=k=>'slap-best-'+k;
 function getBest(k){try{return +localStorage.getItem(bestKey(k))||0}catch(e){return 0}}
 function setBest(k,v){try{localStorage.setItem(bestKey(k),v)}catch(e){}}
@@ -46,7 +48,7 @@ function setBest(k,v){try{localStorage.setItem(bestKey(k),v)}catch(e){}}
 let S=null;
 function newGame(vk){
   S={phase:'ready',vk,score:0,combo:0,misses:0,level:0,spot:(S&&S.vk===vk&&S.spot)||'L',power:0,chargeT:0,locked:0,
-     log:[],needle:0,zone:0,dir:1,speed:0,wobble:false,travel:0,t:0,anim:null,red:{L:0,R:0,S:0},turn:0,ts:1,drop:null,stars:[],last:null,bubble:null,shake:0};
+     log:[],timerOn:false,timeLeft:TIME_LIMIT_MS,cleared:false,finalLeft:0,bonus:0,needle:0,zone:0,dir:1,speed:0,wobble:false,travel:0,t:0,anim:null,red:{L:0,R:0,S:0},turn:0,ts:1,drop:null,stars:[],last:null,bubble:null,shake:0};
   const v=VILLAINS[vk];
   $('h1').innerHTML=`${v.title[0]}<em>${v.title[1]}</em>`;
   $('spotS').innerHTML=`${v.sName}<small>×${v.sMult.toFixed(1)} · tighter · key 3</small>`;
@@ -56,6 +58,8 @@ function newGame(vk){
 const V=()=>VILLAINS[S.vk];
 const spotInfo=sp=>sp==='S'?{name:V().sName,mult:V().sMult}:{name:sp==='L'?'Left cheek':'Right cheek',mult:1};
 const zoneHalf=()=>Math.max(7,38-S.level*2.6)*(S.spot==='S'?V().sTight:1);
+// the PERFECT window shrinks every stage (11.4° -> 3.5°) while the needle gets faster, so late stages are brutal
+const perfectHalf=()=>Math.max(3.5,11.4-S.level*.9)*(S.spot==='S'?V().sTight:1);
 const angDiff=(a,b)=>{let d=Math.abs(a-b)%360;return d>180?360-d:d};
 const sstep=x=>{x=Math.max(0,Math.min(1,x));return x*x*(3-2*x)};
 const easeOutBack=x=>1+2.70158*Math.pow(x-1,3)+1.70158*Math.pow(x-1,2);
@@ -93,16 +97,17 @@ function release(){
   if(S.phase!=='charge')return;
   S.locked=S.power;S.phase='timing';
   S.needle=Math.random()*360;S.zone=(S.needle+110+Math.random()*140)%360;
-  S.speed=Math.min(560,V().base+S.level*30);S.dir=S.level>=4&&Math.random()<.5?-1:1;S.wobble=S.level>=7;S.travel=0;S.t=0;
+  S.speed=Math.min(720,V().base*(1+S.level*.26));S.dir=S.level>=3&&Math.random()<.5?-1:1;S.wobble=S.level>=6;S.travel=0;S.t=0;
   ui();
 }
 function resolve(d){
-  const half=zoneHalf(),g=GRADES.find(g=>d<=half*g.f);
+  const half=zoneHalf(),g=d<=perfectHalf()?GRADES[0]:d<=half*.65?GRADES[1]:d<=half?GRADES[2]:null;
   if(g){
     // rounded to 4 decimals so the server can replay the exact same score from the round log
     const force=Math.round(Math.max(.05,S.locked*(1-.35*d/half))*1e4)/1e4;
     const pts=Math.round(100*force*g.m*spotInfo(S.spot).mult*(1+S.combo*.15));
     S.score+=pts;S.combo++;S.level++;S.log.push({spot:S.spot,grade:g.n,force});
+    if(S.level>=STAGES){S.cleared=true;S.finalLeft=Math.max(0,Math.floor(S.timeLeft));S.timerOn=false} // clock stops on the winning hit
     S.last={txt:`${g.n} · ${Math.round(force*100)}% force · +${pts}`,c:g.c};
     S.anim={t:0,hit:true,spot:S.spot,force,g,pts,combo:S.combo,impacted:false};
   }else{
@@ -143,10 +148,12 @@ function impact(){
 }
 // Social layer hooks: js/game-integration.js listens for these. The game itself never touches the network.
 const emit=(name,detail)=>document.dispatchEvent(new CustomEvent(name,{detail}));
-function begin(vk){newGame(vk);ov.hidden=true;emit('game:start',{villain:vk})}
+function begin(vk){newGame(vk);S.timerOn=true;ov.hidden=true;emit('game:start',{villain:vk})}
 function endAnim(){
   S.anim=null;S.drop=null;S.power=0;
-  if(S.misses>=3){gameOver();return}
+  if(S.cleared){gameOver('cleared');return}
+  if(S.misses>=3){gameOver('lives');return}
+  if(S.timeLeft<=0){gameOver('timeout');return}
   S.phase='ready';ui();
 }
 
@@ -159,7 +166,7 @@ syncControls();
 function showSelect(){
   if(S)S.phase='start';
   ovTitle.innerHTML='Who gets <em>punished</em>?';
-  ovBody.innerHTML=`<p class="lead">A protest game. Pick a criminal, charge your force, and nail the timing. Every hit makes the next one harder.</p>
+  ovBody.innerHTML=`<p class="lead">A protest game. Pick a criminal, charge your force, and nail the timing. Clear 10 stages before the clock runs out. Every hit makes the next one harder.</p>
     <div class="cards" id="cards"></div>
     <p class="lead">Hold to charge · release at the top · tap in the gold arc</p>
     <p class="lead">If you or a child you know is in danger: <b>999</b> · Child helpline <b>1098</b> · Women &amp; children <b>109</b></p>`;
@@ -178,18 +185,23 @@ function showIntro(k){
   const v=VILLAINS[k];
   ovTitle.innerHTML=`${v.title[0]}<em>${v.title[1]}</em>`;
   ovBody.innerHTML=`<p class="bn" style="font-size:1rem">${v.bn}</p><p>${v.intro}</p>
+    <p class="lead">${STAGES} stages · ${TIME_LIMIT_MS/1000} seconds. Finish with time to spare for a bonus (+${TIME_BONUS_PER_SEC} per second left).</p>
     <p class="lead">Weapon: ${v.weaponName}. Special target: ${v.sName} (×${v.sMult.toFixed(1)}, tighter timing).</p>
     <div class="btnrow"><button class="ovbtn" id="go" type="button">Start</button><button class="ovbtn ghost" id="back" type="button">Back</button></div>`;
   $('go').addEventListener('click',()=>begin(k));
   $('back').addEventListener('click',showSelect);
   $('go').focus();
 }
-function gameOver(){
-  S.phase='over';ui();
-  const v=V();let best=getBest(S.vk);
+function gameOver(reason){
+  S.phase='over';S.timerOn=false;ui();
+  const v=V();
+  const secsLeft=reason==='cleared'?Math.floor(S.finalLeft/1000):0;
+  S.bonus=secsLeft*TIME_BONUS_PER_SEC;S.score+=S.bonus;hud();
+  let best=getBest(S.vk);
   if(S.score>best){best=S.score;setBest(S.vk,best);$('best').textContent=best}
-  ovTitle.textContent='Game over';
-  ovBody.innerHTML=`<p class="big">${S.score}</p><p class="lead">${v.name} · best ${best} · reached round ${S.level+1}</p>
+  ovTitle.textContent=reason==='cleared'?`All ${STAGES} stages cleared!`:reason==='timeout'?'Time’s up!':'Game over';
+  ovBody.innerHTML=`<p class="big">${S.score}</p><p class="lead">${v.name} · best ${best} · stage ${Math.min(S.level,STAGES)}/${STAGES}</p>
+  ${reason==='cleared'?`<p class="lead">Time bonus +${S.bonus} (${secsLeft}s left)</p>`:''}
   <div class="help"><p>A hit in a game is a protest. A phone call can stop a real crime.</p>
   ${v.help.map(([n,l])=>`<p><b>${n}</b> ${l}</p>`).join('')}</div>
   <div id="socialSlot" class="social-slot"></div>
@@ -197,7 +209,7 @@ function gameOver(){
   $('again').addEventListener('click',()=>begin(S.vk));
   $('pick').addEventListener('click',showSelect);
   ov.hidden=false;$('again').focus();
-  emit('game:over',{villain:S.vk,score:S.score,rounds:S.log.slice(),best});
+  emit('game:over',{villain:S.vk,score:S.score,rounds:S.log.slice(),best,end:reason,timeLeftMs:reason==='cleared'?S.finalLeft:0});
 }
 $('change').addEventListener('click',()=>{if(S&&(S.phase==='charge'||S.phase==='timing'||S.phase==='anim'))return;showSelect()});
 
@@ -655,10 +667,12 @@ function drawPanel(){
   ctx.fillStyle='#f4efe4';ctx.font=font(DISP,13);ctx.fillText(Math.round(pw*100)+'%',mx+mw/2,my-4);
 
   const tx=64,si=spotInfo(S.spot);ctx.textAlign='left';
-  ctx.fillStyle='#f4efe4';ctx.font=font(DISP,20);ctx.fillText('ROUND '+(S.level+1),tx,446);
+  ctx.fillStyle='#f4efe4';ctx.font=font(DISP,20);ctx.fillText(`STAGE ${Math.min(S.level+1,STAGES)}/${STAGES}`,tx,446);
   ctx.font=font(BODY,12);ctx.fillStyle='#a9bfb6';
   ctx.fillText(`${v.weaponName} → ${si.name} ×${si.mult.toFixed(1)}`,tx,466);
-  ctx.fillText(`Gold arc ±${zoneHalf().toFixed(0)}°`+(S.level>=4?' · may reverse':''),tx,482);
+  const tl=Math.max(0,S.timeLeft),secs=Math.ceil(tl/1000);
+  ctx.fillStyle=tl<=10000?(Math.floor(clock*4)%2?'#ff6b63':'#d6403a'):tl<=20000?'#f2b134':'#a9bfb6';
+  ctx.fillText(`Time left ${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')}`,tx,482);
   const hint={ready:'Hold to charge force',charge:'Release at the top',timing:'Tap in the gold arc'}[S.phase]||'';
   ctx.fillStyle='#f2b134';ctx.font=font(BODY,13);ctx.fillText(hint,tx,506);
   if(S.last){ctx.fillStyle=S.last.c;ctx.font=font(BODY,11);ctx.fillText(S.last.txt,tx,528)}
@@ -668,7 +682,7 @@ function drawPanel(){
   const live=S.phase==='timing'||S.phase==='anim',zc=live?S.zone:0,half=zoneHalf();
   ctx.globalAlpha=live?1:.45;
   ctx.strokeStyle='#f2b134';ctx.beginPath();ctx.arc(cx,cy,r,rad(zc-half),rad(zc+half));ctx.stroke();
-  ctx.strokeStyle='#d6403a';ctx.beginPath();ctx.arc(cx,cy,r,rad(zc-half*.3),rad(zc+half*.3));ctx.stroke();
+  ctx.strokeStyle='#d6403a';ctx.beginPath();ctx.arc(cx,cy,r,rad(zc-perfectHalf()),rad(zc+perfectHalf()));ctx.stroke();
   ctx.globalAlpha=1;ctx.strokeStyle='rgba(244,239,228,.4)';ctx.lineWidth=2;
   for(let d=0;d<360;d+=30){ctx.beginPath();ctx.moveTo(cx+Math.cos(rad(d))*(r-12),cy+Math.sin(rad(d))*(r-12));ctx.lineTo(cx+Math.cos(rad(d))*(r-7),cy+Math.sin(rad(d))*(r-7));ctx.stroke()}
   const na=rad(live?S.needle:0);
@@ -685,13 +699,19 @@ function makeThumb(vk){
 
 // ---------- loop ----------
 let lastT=performance.now(),clock=0;
-function update(dt){
+function update(dt,wall=dt){
   clock+=dt;
   if(!S)return;
   // sdt is slowed during the slow-motion of a perfect hit; input timing and the shake use real time
   const ts=timeScale(),sdt=dt*ts;
+  // The clock follows the wall clock (a hidden tab cannot pause it). During a hit animation it advances in
+  // game time, so the slow-motion of a PERFECT costs no more time than a normal hit.
+  if(S.timerOn&&S.phase!=='start'&&S.phase!=='over'){
+    S.timeLeft-=((S.phase==='anim'&&wall<=.1)?sdt:wall)*1000;
+    if(S.timeLeft<=0){S.timeLeft=0;if(S.phase!=='anim'){gameOver('timeout');return}}
+  }
   S.turn+=Math.max(-dt*4,Math.min(dt*4,(S.vk==='abuser'&&S.spot==='S'?1:0)-S.turn));
-  if(S.phase==='charge'){S.chargeT+=dt;S.power=(1-Math.cos(S.chargeT*(3+S.level*.3)))/2}
+  if(S.phase==='charge'){S.chargeT+=dt;S.power=(1-Math.cos(S.chargeT*(3+S.level*.65)))/2}
   else if(S.phase==='timing'){
     S.t+=dt;const sp=S.speed*(S.wobble?1+.5*Math.sin(S.t*4.3):1),d=S.dir*sp*dt;
     S.needle=(S.needle+d+360)%360;S.travel+=Math.abs(d);
@@ -707,6 +727,14 @@ function update(dt){
   if(S.bubble){S.bubble.t-=sdt;if(S.bubble.t<=0)S.bubble=null}
   S.shake=Math.max(0,S.shake-dt);
 }
+// thin countdown bar along the top edge of the screen; turns red and pulses in the last 10 seconds
+function drawTimer(){
+  if(!S.timerOn&&S.phase!=='over'&&!S.cleared)return;
+  const f=Math.max(0,Math.min(1,(S.cleared?S.finalLeft:S.timeLeft)/TIME_LIMIT_MS)),low=f<=1/6;
+  ctx.fillStyle='rgba(0,0,0,.35)';ctx.fillRect(0,0,W,6);
+  ctx.fillStyle=low?(Math.floor(clock*4)%2?'#ff6b63':'#d6403a'):f<=1/3?'#f2b134':'#9fd3c0';
+  ctx.fillRect(0,0,W*f,6);
+}
 function draw(){
   ctx.clearRect(0,0,W,H);
   if(!S)return;
@@ -719,10 +747,11 @@ function draw(){
   drawBoard(S.vk);drawCharacter(S,S.vk,clock);drawSlapHand();drawFx();
   ctx.restore();
   if(isPerfect(a))drawPerfectOverlay(a);
+  drawTimer();
   ctx.restore();ctx.restore();
   drawPanel();
 }
-function loop(now){const dt=Math.min(.05,(now-lastT)/1000);lastT=now;update(dt);draw();requestAnimationFrame(loop)}
+function loop(now){const wall=(now-lastT)/1000,dt=Math.min(.05,wall);lastT=now;update(dt,wall);draw();requestAnimationFrame(loop)}
 
 // read by js/game-integration.js so a dialog is never opened in the middle of a swing
 window.PunisherGame={isBusy:()=>!!S&&(S.phase==='charge'||S.phase==='timing'||S.phase==='anim')};
