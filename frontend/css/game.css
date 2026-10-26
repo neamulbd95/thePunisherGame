@@ -103,15 +103,53 @@ body.menu .overlay{padding:12px clamp(12px,4vw,40px)}
 /* on big screens the menu screens scale up so they use the page instead of floating in it */
 @media (min-width:700px) and (min-height:820px){
   .overlay{gap:12px}
-  .overlay h2{font-size:2.6rem}
+  .overlay h2{font-size:2.3rem}
   .overlay .lead{font-size:1rem;line-height:1.45}
   .overlay .big{font-size:4.4rem}
   #ovBody{max-width:720px;gap:14px!important}
   .cards{max-width:720px;gap:14px}
   .card{padding:10px 8px 12px}
-  .card canvas{max-width:170px}
+  .card canvas{max-width:140px}
   .card .nm{font-size:1.25rem}.card .bnm{font-size:1rem}.card .wp{font-size:.85rem}
   .weapons{max-width:640px}.weapon b{font-size:1rem}.weapon small{font-size:.8rem}
   .ovbtn{font-size:1.2rem;padding:13px 28px}
   .help{padding:14px 20px}
 }
+
+/* ---- emergency helplines: impossible to miss ---- */
+.protest-line{font-weight:600;font-size:.95rem;line-height:1.4;max-width:34ch;color:var(--chalk)}
+.helpbox{width:100%;max-width:480px;border:2px solid var(--red);border-radius:14px;padding:10px 12px 12px;background:rgba(214,64,58,.14);
+  text-align:center;box-shadow:0 0 0 0 rgba(214,64,58,.5);animation:hbPulse 2.8s ease-out infinite}
+.helpbox .hb-title{margin:0 0 8px;max-width:none;font-weight:700;font-size:.95rem;line-height:1.3;color:var(--chalk)}
+.helpbox .hb-ico{color:var(--red);font-size:1.15em;margin-right:2px}
+.helpbox .hb-bn{display:block;color:var(--gold);font-size:.95em;margin-top:1px}
+.helpbox ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px}
+.helpbox li{display:grid;justify-items:center;gap:3px}
+.helpbox .hb-num{display:inline-block;min-width:4.4ch;padding:3px 14px;border-radius:12px;background:var(--gold);color:#12221e;
+  font:400 1.9rem/1.15 var(--display);letter-spacing:.04em;text-decoration:none}
+.helpbox .hb-num:hover,.helpbox .hb-num:focus-visible{background:#ffd36b;outline:3px solid var(--chalk);outline-offset:2px}
+.helpbox .hb-lbl{font-weight:600;font-size:.82rem;line-height:1.2;color:var(--chalk)}
+.helpbox .hb-lbl small{display:block;font-weight:400;font-size:.9em;color:var(--muted)}
+@keyframes hbPulse{0%{box-shadow:0 0 0 0 rgba(214,64,58,.5)}70%,100%{box-shadow:0 0 0 10px rgba(214,64,58,0)}}
+@media (prefers-reduced-motion:reduce){.helpbox{animation:none}}
+@media (min-width:700px) and (min-height:820px){.helpbox .hb-num{font-size:2.3rem}.helpbox .hb-title{font-size:1.05rem}.helpbox .hb-lbl{font-size:.95rem}}
+@media (max-height:760px){.helpbox{padding:7px 10px 9px}.helpbox .hb-num{font-size:1.6rem;padding:1px 12px}.helpbox .hb-title{margin-bottom:5px;font-size:.88rem}}
+/* phones: keep the three helplines on one row and the landing page compact */
+.helpbox ul{grid-template-columns:repeat(auto-fit,minmax(86px,1fr))}
+@media (max-width:480px){
+  .helpbox{padding:8px 8px 10px}
+  .helpbox .hb-num{font-size:1.55rem;min-width:3.6ch;padding:2px 8px}
+  .helpbox .hb-lbl{font-size:.74rem}
+  .helpbox .hb-title{font-size:.86rem}
+  .card canvas{max-width:78px}
+  .overlay{gap:5px}
+  .overlay .lead{font-size:.78rem;line-height:1.3}
+}
+/* short screens: the helplines matter more than the intro text, so make room for them */
+@media (max-height:700px){.l-intro,.l-hint{display:none}}
+/* the body scrolls (scroll bar hidden) while the helplines stay pinned at the bottom of the screen */
+.overlay{overflow:hidden}
+#ovBody{flex:0 1 auto;min-height:0;overflow-y:auto;margin-bottom:0;scrollbar-width:none;-ms-overflow-style:none}
+#ovBody::-webkit-scrollbar{display:none}
+.ov-foot{flex:none;width:100%;display:flex;justify-content:center;margin-bottom:auto}
+.ov-foot:empty{display:none}

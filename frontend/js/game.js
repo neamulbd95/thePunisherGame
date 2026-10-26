@@ -209,8 +209,16 @@ function endAnim(){
   S.phase='ready';ui();
 }
 
+// ---------- emergency helplines (shown prominently on the landing and game-over screens) ----------
+const HELP_ALL=[['999','National Emergency','জাতীয় জরুরি সেবা'],['1098','Child helpline','শিশু হেল্পলাইন'],['109','Women & children','নারী ও শিশু হেল্পলাইন']];
+const helpFor=v=>HELP_ALL.filter(([n])=>v.help.some(([m])=>m===n));
+const helpBox=list=>`<aside class="helpbox" aria-label="Emergency helplines">
+  <p class="hb-title"><span class="hb-ico" aria-hidden="true">☎</span> If you or a child you know is in danger, call now<span class="hb-bn">বিপদে পড়লে এখনই ফোন করুন</span></p>
+  <ul>${list.map(([n,en,bn])=>`<li><a class="hb-num" href="tel:${n}" aria-label="Call ${n}, ${en}">${n}</a><span class="hb-lbl">${en}<small>${bn}</small></span></li>`).join('')}</ul>
+</aside>`;
+
 // ---------- overlay ----------
-const ov=$('overlay'),ovTitle=$('ovTitle'),ovBody=$('ovBody');
+const ov=$('overlay'),ovTitle=$('ovTitle'),ovBody=$('ovBody'),ovFoot=$('ovFoot'); // ovFoot is pinned under the (scrollable) body: the helplines are never scrolled out of sight
 const controlsEl=document.querySelector('.controls');
 // While a menu screen (landing, intro, game over) is showing, it takes the whole area below the header and the
 // hit-spot / charge controls give their space back. While playing, the canvas is fitted to the free area.
@@ -222,12 +230,13 @@ function showSelect(){
   screen='select';
   const nx=nextUnlock();
   ovTitle.innerHTML='Who gets <em>punished</em>?';
-  ovBody.innerHTML=`<p class="lead">A protest game. Pick a criminal, charge your force, and nail the timing. Clear ${STAGES} stages before the clock runs out. Every hit makes the next one harder.</p>
+  ovBody.innerHTML=`<p class="lead l-intro">A protest game. Pick a criminal, charge your force, and nail the timing. Clear ${STAGES} stages before the clock runs out. Every hit makes the next one harder.</p>
     <div class="cards" id="cards"></div>
     <p class="lead progress-line">${progressFromServer?`Total score <b>${progress.total.toLocaleString()}</b><br>${nx?`Next unlock: ${nx.label} at ${nx.at.toLocaleString()}`:'Everything unlocked'}`:'Choose a nickname to save your scores and unlock more villains, weapons and hit areas.'}</p>
     ${progressFromServer?'':'<button class="ovbtn small" id="loginHint" type="button">Choose a nickname</button>'}
-    <p class="lead">Hold to charge · release at the top<br>Tap in the gold arc</p>
-    <div class="lead helplines"><p>If you or a child you know is in danger:</p><p><b>999</b> National Emergency</p><p><b>1098</b> Child helpline</p><p><b>109</b> Women &amp; children</p></div>`;
+    <p class="lead l-hint">Hold to charge · release at the top<br>Tap in the gold arc</p>
+    `;
+  ovFoot.innerHTML=helpBox(HELP_ALL);
   const cards=$('cards');
   const lh=$('loginHint');if(lh)lh.addEventListener('click',()=>emit('ui:login'));
   Object.entries(VILLAINS).forEach(([k,v])=>{
@@ -242,7 +251,7 @@ function showSelect(){
   if(S)ui();
 }
 function showIntro(k,picked){
-  screen='intro';
+  screen='intro';ovFoot.innerHTML='';
   const v=VILLAINS[k],w=picked&&weaponOpen(picked)?picked:chosenWeapon();
   ovTitle.innerHTML=`${WEAPONS[w].title} the <em>${v.short}</em>`;
   const per=progress.per[k]||0;
@@ -278,8 +287,10 @@ function gameOver(reason){
   ovBody.innerHTML=`<p class="big">${S.score}</p><p class="lead">${v.name} · best ${best} · stage ${Math.min(S.level,STAGES)}/${STAGES}</p>
   ${reason==='cleared'?`<p class="lead">Time bonus +${S.bonus} (${secsLeft}s left)</p>`:''}
   ${unlockHtml}
-  <div class="help"><p>A hit in a game is a protest. A phone call can stop a real crime.</p>
-  ${v.help.map(([n,l])=>`<p><b>${n}</b> ${l}</p>`).join('')}</div>
+  <p class="protest-line">A hit in a game is a protest. A phone call can stop a real crime.</p>
+  `;
+  ovFoot.innerHTML=helpBox(helpFor(v));
+  ovBody.innerHTML+=`
   <div id="socialSlot" class="social-slot"></div>
   <div class="btnrow"><button class="ovbtn" id="again" type="button">Play again</button><button class="ovbtn ghost" id="pick" type="button">Change villain</button></div>`;
   $('again').addEventListener('click',()=>begin(S.vk,S.weapon));
