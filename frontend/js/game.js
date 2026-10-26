@@ -86,7 +86,7 @@ let S=null;
 function newGame(vk,weapon='hand'){
   const keep=(S&&S.vk===vk&&S.spot)||'L';
   S={phase:'ready',vk,weapon:WEAPONS[weapon]&&weaponOpen(weapon)?weapon:'hand',score:0,combo:0,misses:0,level:0,spot:keep==='B'&&!kickOpen(vk)?'L':keep,power:0,chargeT:0,locked:0,
-     log:[],timerOn:false,timeLeft:TIME_LIMIT_MS,cleared:false,finalLeft:0,bonus:0,needle:0,zone:0,dir:1,speed:0,wobble:false,travel:0,t:0,anim:null,red:{L:0,R:0,S:0,B:0},turn:0,turnB:0,ts:1,drop:null,stars:[],last:null,bubble:null,shake:0};
+     log:[],na:0,hist:[],timerOn:false,timeLeft:TIME_LIMIT_MS,cleared:false,finalLeft:0,bonus:0,needle:0,zone:0,dir:1,speed:0,wobble:false,travel:0,t:0,anim:null,red:{L:0,R:0,S:0,B:0},turn:0,turnB:0,ts:1,drop:null,stars:[],last:null,bubble:null,shake:0};
   const v=VILLAINS[vk];
   $('h1').innerHTML=`${WEAPONS[S.weapon].title} the <em>${v.short}</em>`;
   $('spotS').innerHTML=`${v.sName}<small>×${v.sMult.toFixed(1)} · key 3</small>`;
@@ -136,14 +136,29 @@ function ui(){
 }
 
 // ---------- actions ----------
+// Between the needle being drawn and a tap being handled there is screen + input latency (a few frames; at 500 deg/s that is
+// tens of degrees). The tap is judged at the needle position INPUT_LAG_MS ago, i.e. where the player actually saw it.
+const INPUT_LAG_MS=35;
+const norm360=a=>((a%360)+360)%360;
+function compensatedNeedle(){
+  const h=S.hist;
+  // the needle was moved from outside the game loop (tests / debugging): use it as it is
+  if(!h||!h.length||angDiff(norm360(h[h.length-1].a),S.needle)>.01)return S.needle;
+  const tp=performance.now()-INPUT_LAG_MS;
+  if(tp<=h[0].t)return norm360(h[0].a);
+  for(let i=h.length-1;i>0;i--){
+    if(h[i-1].t<=tp){const k=Math.min(1,(tp-h[i-1].t)/Math.max(1,h[i].t-h[i-1].t));return norm360(lerp(h[i-1].a,h[i].a,k))}
+  }
+  return S.needle;
+}
 function press(){
   if(S.phase==='ready'){ensureAudio();S.phase='charge';S.chargeT=0;S.power=0;ui()}
-  else if(S.phase==='timing')resolve(angDiff(S.needle,S.zone));
+  else if(S.phase==='timing')resolve(angDiff(compensatedNeedle(),S.zone));
 }
 function release(){
   if(S.phase!=='charge')return;
   S.locked=S.power;S.phase='timing';
-  S.needle=Math.random()*360;S.zone=(S.needle+110+Math.random()*140)%360;
+  S.needle=Math.random()*360;S.na=S.needle;S.hist=[];S.zone=(S.needle+110+Math.random()*140)%360;
   S.speed=Math.min(560,V().base*(1+S.level*.216));S.dir=S.level>=4&&Math.random()<.5?-1:1;S.wobble=S.level>=8;S.travel=0;S.t=0;
   ui();
 }
@@ -894,6 +909,8 @@ function drawPanel(){
   if(S.last){ctx.fillStyle=S.last.c;ctx.font=font(BODY,11);ctx.fillText(S.last.txt,tx,528)}
 
   const cx=284,cy=484,r=54,rad=d=>(d-90)*Math.PI/180;
+  // flat line ends: with the default round caps (left over from other drawing) each arc looked ~5-6 degrees wider than the range that counts
+  ctx.lineCap='butt';
   ctx.lineWidth=12;ctx.strokeStyle='rgba(244,239,228,.13)';ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.stroke();
   const live=S.phase==='timing'||S.phase==='anim',zc=live?S.zone:0,half=zoneHalf();
   ctx.globalAlpha=live?1:.45;
@@ -931,7 +948,8 @@ function update(dt,wall=dt){
   if(S.phase==='charge'){S.chargeT+=dt;S.power=(1-Math.cos(S.chargeT*(3+S.level*.57)))/2}
   else if(S.phase==='timing'){
     S.t+=dt;const sp=S.speed*(S.wobble?1+.5*Math.sin(S.t*4.3):1),d=S.dir*sp*dt;
-    S.needle=(S.needle+d+360)%360;S.travel+=Math.abs(d);
+    S.na+=d;S.needle=norm360(S.na);S.travel+=Math.abs(d);
+    const tn=performance.now();S.hist.push({t:tn,a:S.na});while(S.hist.length>1&&S.hist[0].t<tn-150)S.hist.shift();
     if(S.travel>1080)resolve(999);
   }else if(S.phase==='anim'){
     const a=S.anim;a.t+=sdt;
