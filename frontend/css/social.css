@@ -67,3 +67,24 @@ input{flex:1}
 dialog button:focus-visible,dialog select:focus-visible,dialog input:focus-visible{outline:3px solid var(--chalk);outline-offset:2px}
 
 @media (max-width:380px){.board-row{grid-template-columns:2.2em 24px 1fr auto;gap:6px}}
+
+.google-slot{display:flex;justify-content:center;margin:0 0 10px;min-height:44px}
+.google-slot[hidden]{display:none}
+.fb-btn:disabled{background:#2a3b4f;color:#8ea0b4}
+
+/* brand line and footer (the home page names the app and links to the privacy policy) */
+.brand{margin:0 0 1px;flex-basis:100%;font:700 .68rem var(--body);letter-spacing:.2em;text-transform:uppercase;color:var(--gold)}
+.site-foot{width:100%;max-width:440px;text-align:center;font-size:.7rem;color:var(--muted);padding:2px 0 0}
+.site-foot a{color:var(--gold)}
+
+/* nickname sign-up, recovery code and the Facebook share button */
+.chip{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recover{margin:10px 0 4px;color:var(--muted)}
+.recover summary{cursor:pointer;color:var(--chalk);font-weight:600;font-size:.88rem;padding:6px 0}
+.recover form{display:grid;gap:8px;margin-top:6px}
+.recovery{border:1.5px solid var(--gold);border-radius:12px;padding:10px 12px;margin:0 0 12px;background:rgba(242,177,52,.1)}
+.recovery p{margin:0 0 6px}
+.recovery .code{display:block;font-size:1.05rem;letter-spacing:.08em;text-align:center;margin:6px 0 8px;word-break:break-all}
+.recovery .btnrow{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.ovbtn.fb{background:#1877f2;text-decoration:none;display:inline-block}
+a.ovbtn.small{padding:8px 16px}

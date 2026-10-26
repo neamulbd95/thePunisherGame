@@ -85,20 +85,11 @@ export async function loadBoard({ append = false } = {}) {
   setState('Loading…', 'loading');
   const qs = new URLSearchParams({ period: view.period, limit: String(PAGE), offset: String(view.offset) });
   if (view.villain) qs.set('villain', view.villain);
-  const path = { global: '/leaderboards/global', game: '/leaderboards/game-friends', facebook: '/leaderboards/facebook-friends' }[view.scope];
+  const path = { global: '/leaderboards/global', game: '/leaderboards/game-friends' }[view.scope];
 
   try {
     const data = await api(`${path}?${qs}`);
     if (my !== view.token) return; // a newer request superseded this one
-    if (data.available === false) {
-      setState(
-        data.reason === 'NEEDS_REFRESH'
-          ? 'Your Facebook friends list needs a refresh. Open Account → “Enable Facebook friends board”.'
-          : 'Facebook friends board is not enabled. Facebook only shares friends who also play and only after you allow it (Account tab). The Game friends board always works.',
-        'info',
-      );
-      return;
-    }
     if (!data.players.length && !append) {
       setState(
         view.scope === 'global' ? 'No scores yet for this filter. Be the first to punish!' : 'No friends with scores yet. Invite some from the Friends tab.',

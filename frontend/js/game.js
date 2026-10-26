@@ -125,7 +125,7 @@ function hud(){
 function ui(){
   const act=$('act'),lock=S.phase==='charge'||S.phase==='timing';
   const kickOk=kickOpen(S.vk);
-  $('spotB').innerHTML=kickOk?`Bottom (kick)<small>×${SPOT_MULT.B.toFixed(1)} · key 4</small>`:`🔒 Bottom<small>${progressFromServer?`${KICK_UNLOCK.toLocaleString()} pts on ${V().short}`:'Log in'}</small>`;
+  $('spotB').innerHTML=kickOk?`Bottom (kick)<small>×${SPOT_MULT.B.toFixed(1)} · key 4</small>`:`🔒 Bottom<small>${progressFromServer?`${KICK_UNLOCK.toLocaleString()} pts on ${V().short}`:'Nickname'}</small>`;
   document.querySelectorAll('.spot').forEach(b=>{
     const locked=b.dataset.spot==='B'&&!kickOk;
     b.classList.toggle('locked',locked);b.setAttribute('aria-pressed',b.dataset.spot===S.spot);b.disabled=lock||locked;
@@ -222,8 +222,8 @@ function showSelect(){
   ovTitle.innerHTML='Who gets <em>punished</em>?';
   ovBody.innerHTML=`<p class="lead">A protest game. Pick a criminal, charge your force, and nail the timing. Clear ${STAGES} stages before the clock runs out. Every hit makes the next one harder.</p>
     <div class="cards" id="cards"></div>
-    <p class="lead progress-line">${progressFromServer?`Total score <b>${progress.total.toLocaleString()}</b><br>${nx?`Next unlock: ${nx.label} at ${nx.at.toLocaleString()}`:'Everything unlocked'}`:'Log in with Facebook to save your scores and unlock more villains, weapons and hit areas.'}</p>
-    ${progressFromServer?'':'<button class="ovbtn small" id="loginHint" type="button">Log in to unlock</button>'}
+    <p class="lead progress-line">${progressFromServer?`Total score <b>${progress.total.toLocaleString()}</b><br>${nx?`Next unlock: ${nx.label} at ${nx.at.toLocaleString()}`:'Everything unlocked'}`:'Choose a nickname to save your scores and unlock more villains, weapons and hit areas.'}</p>
+    ${progressFromServer?'':'<button class="ovbtn small" id="loginHint" type="button">Choose a nickname</button>'}
     <p class="lead">Hold to charge · release at the top<br>Tap in the gold arc</p>
     <div class="lead helplines"><p>If you or a child you know is in danger:</p><p><b>999</b> National Emergency</p><p><b>1098</b> Child helpline</p><p><b>109</b> Women &amp; children</p></div>`;
   const cards=$('cards');
@@ -231,7 +231,7 @@ function showSelect(){
   Object.entries(VILLAINS).forEach(([k,v])=>{
     const open=villainOpen(k);
     const b=document.createElement('button');b.type='button';b.className='card'+(open?'':' locked');b.disabled=!open;
-    b.innerHTML=`<span class="nm">${v.name}</span><span class="bnm">${v.bn}</span><span class="wp">${open?`best ${getBest(k)}`:`🔒 ${progressFromServer?`${v.unlock.toLocaleString()} pts`:'Log in to unlock'}`}</span>`;
+    b.innerHTML=`<span class="nm">${v.name}</span><span class="bnm">${v.bn}</span><span class="wp">${open?`best ${getBest(k)}`:`🔒 ${progressFromServer?`${v.unlock.toLocaleString()} pts`:'Needs a nickname'}`}</span>`;
     b.prepend(makeThumb(k));
     if(open)b.addEventListener('click',()=>{ensureAudio();showIntro(k)});
     cards.appendChild(b);
@@ -248,13 +248,13 @@ function showIntro(k,picked){
     <p class="lead">${STAGES} stages · ${TIME_LIMIT_MS/1000} seconds. Finish with time to spare for a bonus (+${TIME_BONUS_PER_SEC} per second left).</p>
     <p class="lead">Choose your weapon</p>
     <div class="weapons" id="weapons" role="group" aria-label="Weapon"></div>
-    <p class="lead">Special target: ${v.sName} (×${v.sMult.toFixed(1)}, tighter timing). ${kickOpen(k)?`Bottom kick unlocked (×${SPOT_MULT.B.toFixed(1)}, tightest timing).`:(progressFromServer?`Bottom kick: 🔒 score ${KICK_UNLOCK.toLocaleString()} against the ${v.short} to unlock (${per.toLocaleString()}/${KICK_UNLOCK.toLocaleString()}).`:'Bottom kick: 🔒 log in to unlock it.')}</p>
+    <p class="lead">Special target: ${v.sName} (×${v.sMult.toFixed(1)}, tighter timing). ${kickOpen(k)?`Bottom kick unlocked (×${SPOT_MULT.B.toFixed(1)}, tightest timing).`:(progressFromServer?`Bottom kick: 🔒 score ${KICK_UNLOCK.toLocaleString()} against the ${v.short} to unlock (${per.toLocaleString()}/${KICK_UNLOCK.toLocaleString()}).`:'Bottom kick: 🔒 needs a nickname.')}</p>
     <div class="btnrow"><button class="ovbtn" id="go" type="button">Start</button><button class="ovbtn ghost" id="back" type="button">Back</button></div>`;
   const grid=$('weapons');
   Object.entries(WEAPONS).forEach(([id,wp])=>{
     const open=weaponOpen(id),b=document.createElement('button');
     b.type='button';b.className='weapon'+(open?'':' locked');b.disabled=!open;b.setAttribute('aria-pressed',String(id===w));
-    b.innerHTML=`<b>${wp.n}</b><small>${open?`×${wp.mult.toFixed(2)}`:`🔒 ${progressFromServer?`${wp.unlock.toLocaleString()} pts`:'Log in'}`}</small>`;
+    b.innerHTML=`<b>${wp.n}</b><small>${open?`×${wp.mult.toFixed(2)}`:`🔒 ${progressFromServer?`${wp.unlock.toLocaleString()} pts`:'Nickname'}`}</small>`;
     if(open)b.addEventListener('click',()=>{setWeaponPref(id);showIntro(k,id)});
     grid.appendChild(b);
   });

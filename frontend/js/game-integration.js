@@ -4,7 +4,6 @@
 // and never waits for the network, so a slow or missing API cannot affect gameplay.
 import { api, userMessage } from './api.js';
 import * as session from './session.js';
-import { facebookAvailable, facebookLogin } from './facebook-auth.js';
 import { initBoard, loadBoard, initFriends, loadFriends, avatarNode } from './leaderboard.js';
 
 const cfg = window.PUNISHER_CONFIG;
@@ -19,6 +18,8 @@ function el(tag, props = {}, ...kids) {
   kids.forEach((k) => n.append(k));
   return n;
 }
+/** The server's field message for a validation error (for example "Please choose a respectful nickname."). */
+const problemText = (err) => (err?.status === 422 && err.details?.[0]?.message) || userMessage(err);
 
 // ---------------- dialog + tabs ----------------
 const TABS = ['board', 'friends', 'account'];
@@ -45,37 +46,41 @@ $('account').addEventListener('click', () => openDialog('account'));
 // ---------------- account panel ----------------
 function renderChip() {
   const b = $('account');
-  b.textContent = auth.status === 'authed' ? auth.player.displayName.slice(0, 12) : 'Log in';
-  b.setAttribute('aria-label', auth.status === 'authed' ? `Account: ${auth.player.displayName}` : 'Log in');
+  b.textContent = auth.status === 'authed' ? auth.player.displayName : 'Nickname';
+  b.setAttribute('aria-label', auth.status === 'authed' ? `Player: ${auth.player.displayName}` : 'Choose a nickname');
 }
 
-function acctMsg(text, kind = '') {
-  $('acctMsg').textContent = text;
-  $('acctMsg').dataset.kind = kind;
+function msg(id, text, kind = '') {
+  $(id).textContent = text;
+  $(id).dataset.kind = kind;
+}
+const acctMsg = (t, k) => msg('acctMsg', t, k);
+const regMsg = (t, k) => msg('regMsg', t, k);
+
+// The recovery code is shown once (right after sign-up or when a new one is requested). It is kept here, in memory,
+// only until the player confirms they saved it.
+let pendingRecovery = null;
+
+function showRecovery(code) {
+  pendingRecovery = code;
+  renderRecovery();
+}
+function renderRecovery() {
+  $('recoveryBox').hidden = !pendingRecovery;
+  $('recoveryCode').textContent = pendingRecovery ?? '';
 }
 
 async function renderAccount() {
   const authed = auth.status === 'authed';
   $('acctGuest').hidden = authed;
   $('acctAuthed').hidden = !authed;
-  if (!authed) {
-    const fb = facebookAvailable();
-    $('fbLogin').disabled = !fb;
-    $('fbLogin').hidden = !fb && cfg.DEV_MOCK_LOGIN;
-    $('devLogin').hidden = !cfg.DEV_MOCK_LOGIN;
-    $('fbNote').textContent = fb
-      ? 'You can keep playing as a guest at any time.'
-      : cfg.DEV_MOCK_LOGIN
-        ? 'Facebook is not configured locally; use the dev login below.'
-        : 'Facebook login is not available on this address.';
-    return;
-  }
+  if (!authed) return;
   const p = auth.player;
   $('acctName').textContent = p.displayName;
   $('acctSub').textContent = 'Friend code: ' + p.friendCode;
   $('acctAvatar').replaceChildren(avatarNode(p.avatarUrl));
-  $('nickInput').value = p.displayName;
-  $('fbFriendsBtn').hidden = !(facebookAvailable() && !p.facebookFriendsEnabled);
+  $('nickInput').value = p.nickname ?? '';
+  renderRecovery();
   try {
     const s = await api('/players/me/stats');
     const dl = $('acctStats');
@@ -88,37 +93,60 @@ async function renderAccount() {
   }
 }
 
-async function doLogin(getToken) {
-  acctMsg('Signing in…', 'loading');
+$('regForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nickname = $('regNick').value.trim();
+  if (!nickname) return regMsg('Type a nickname first.', 'error');
+  regMsg('Creating your player…', 'loading');
   try {
-    const t = await getToken();
-    if (t.cancelled) return acctMsg('Login cancelled. You can keep playing as a guest.', 'info');
-    await session.loginWithFacebookToken(t.accessToken);
+    const { recoveryCode } = await session.register(nickname);
+    $('regNick').value = '';
+    regMsg('');
+    showRecovery(recoveryCode);
     acctMsg('');
   } catch (err) {
-    acctMsg(err.status === 401 ? 'Facebook login was rejected. Please try again.' : userMessage(err), 'error');
+    regMsg(err.status === 409 ? 'That nickname is very popular right now, please try another one.' : problemText(err), 'error');
   }
-}
-
-$('fbLogin').addEventListener('click', () => doLogin(() => facebookLogin()));
-$('devLogin').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const name = $('devName').value.trim().replace(/:/g, ' ') || 'Dev Player';
-  const id = 'dev-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
-  doLogin(async () => ({ accessToken: `mock:${id}:${name}` }));
 });
 
-$('fbFriendsBtn').addEventListener('click', async () => {
-  acctMsg('Asking Facebook…', 'loading');
+$('recoverForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  regMsg('Looking for your player…', 'loading');
   try {
-    const t = await facebookLogin({ scope: 'user_friends', rerequest: true });
-    if (t.cancelled) return acctMsg('Nothing changed.', 'info');
-    if (!t.grantedScopes.includes('user_friends')) return acctMsg('Facebook friends sharing was not allowed. The Game friends board still works.', 'info');
-    await api('/friends/facebook/sync', { method: 'POST', body: { accessToken: t.accessToken } });
-    const { player } = await api('/auth/me');
-    auth.player = player;
-    acctMsg('Facebook friends board enabled.', 'ok');
-    renderAccount();
+    await session.recover($('recHandle').value, $('recCode').value);
+    $('recHandle').value = '';
+    $('recCode').value = '';
+    regMsg('');
+  } catch (err) {
+    regMsg(err.status === 401 ? 'No player matches that name and recovery code. Check both and try again.' : userMessage(err), 'error');
+  }
+});
+
+$('copyRecovery').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(`${auth.player.displayName}  ${pendingRecovery}`);
+    acctMsg('Copied. Keep it somewhere safe, for example in a note on your phone.', 'ok');
+  } catch {
+    acctMsg('Could not copy automatically. Please write the code down.', 'info');
+  }
+});
+$('downloadRecovery').addEventListener('click', () => {
+  const text = `Bangla Punisher recovery code\nPlayer: ${auth.player.displayName}\nCode:   ${pendingRecovery}\n\nTo continue as this player on another device: Nickname button -> "I already have a player".\n`;
+  const a = el('a', { href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })), download: 'bangla-punisher-recovery.txt' });
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+$('recoverySaved').addEventListener('click', () => {
+  pendingRecovery = null;
+  renderRecovery();
+  acctMsg('');
+});
+
+$('newCodeBtn').addEventListener('click', async () => {
+  if (!confirm('Create a new recovery code? The old one will stop working.')) return;
+  try {
+    showRecovery(await session.newRecoveryCode());
+    acctMsg('Your old recovery code no longer works. Save the new one.', 'ok');
   } catch (err) {
     acctMsg(userMessage(err), 'error');
   }
@@ -127,18 +155,31 @@ $('fbFriendsBtn').addEventListener('click', async () => {
 $('nickForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   try {
-    await session.setNickname($('nickInput').value);
-    acctMsg('Nickname saved.', 'ok');
+    await session.setNickname($('nickInput').value.trim());
+    acctMsg(`You are now ${auth.player.displayName}.`, 'ok');
   } catch (err) {
-    acctMsg(err.status === 422 ? 'Use 2–24 letters, numbers, spaces, dot, dash or underscore.' : userMessage(err), 'error');
+    acctMsg(problemText(err), 'error');
   }
 });
-$('logoutBtn').addEventListener('click', () => session.logout().catch((err) => acctMsg(userMessage(err), 'error')));
+
+$('logoutBtn').addEventListener('click', async () => {
+  const warn = pendingRecovery
+    ? 'You have not confirmed that you saved your recovery code. Without it you cannot come back as this player. Sign out anyway?'
+    : `Sign out on this device? You can come back as ${auth.player.displayName} only with your recovery code.`;
+  if (!confirm(warn)) return;
+  try {
+    await session.logout();
+    pendingRecovery = null;
+  } catch (err) {
+    acctMsg(userMessage(err), 'error');
+  }
+});
 $('deleteBtn').addEventListener('click', async () => {
-  if (!confirm('Delete your account, scores and friends permanently? This cannot be undone.')) return;
+  if (!confirm('Delete your player, scores and friends permanently? This cannot be undone.')) return;
   try {
     await session.deleteAccount();
-    acctMsg('Your account and data were deleted.', 'ok');
+    pendingRecovery = null;
+    regMsg('Your player and all its data were deleted.', 'ok');
   } catch (err) {
     acctMsg(userMessage(err), 'error');
   }
@@ -155,7 +196,19 @@ document.addEventListener('game:start', (e) => {
 });
 
 document.addEventListener('game:over', (e) => renderGameOver(e.detail, current));
-document.addEventListener('ui:login', () => openDialog('account')); // the landing screen's "Log in to unlock" button
+document.addEventListener('ui:login', () => openDialog('account')); // the landing screen's "Create nickname" button
+
+/** A normal link, so pop-up blockers never interfere. Facebook's own share window; no Facebook login or SDK is used. */
+function shareLink(scoreId) {
+  const page = `${cfg.API_BASE_URL}/share/score/${scoreId}`; // public page with the preview card (nickname#tag, score, villain)
+  return el('a', {
+    class: 'ovbtn fb small',
+    href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(page)}`,
+    target: '_blank',
+    rel: 'noopener noreferrer',
+    text: 'Share on Facebook',
+  });
+}
 
 function renderGameOver(result, game) {
   const slot = $('socialSlot');
@@ -168,10 +221,10 @@ function renderGameOver(result, game) {
   slot.append(status, row);
 
   if (auth.status !== 'authed') {
-    status.textContent = 'Log in to save this score, join the leaderboard and unlock more villains, weapons and hit areas. Guests cannot unlock anything.';
-    const login = el('button', { type: 'button', class: 'ovbtn small', text: 'Log in' });
-    login.addEventListener('click', () => openDialog('account'));
-    row.append(login, boardBtn);
+    status.textContent = 'Choose a nickname to save this score, join the leaderboard and unlock more villains, weapons and hit areas. Guests cannot unlock anything.';
+    const create = el('button', { type: 'button', class: 'ovbtn small', text: 'Choose a nickname' });
+    create.addEventListener('click', () => openDialog('account'));
+    row.append(create, boardBtn);
     return;
   }
   row.append(boardBtn);
@@ -185,7 +238,7 @@ function renderGameOver(result, game) {
     const s = await game.promise;
     if (s.error) {
       status.textContent = s.error.code === 'LOCKED'
-        ? 'That villain or weapon is not unlocked on your account yet (progress counts verified, saved scores), so this score was not saved.'
+        ? 'That villain or weapon is not unlocked on your player yet (progress counts verified, saved scores), so this score was not saved.'
         : 'Could not reach the server, so this score was not saved. ' + userMessage(s.error);
       return;
     }
@@ -197,6 +250,7 @@ function renderGameOver(result, game) {
       });
       status.textContent = `Saved! You are #${r.allTimeRank} on the all-time board${r.personalBest ? ' — a new personal best!' : '.'}`;
       announce(status.textContent);
+      row.prepend(shareLink(r.scoreId)); // only a saved (verified) score can be shared
       // the saved score may have unlocked something new
       const labels = await syncProgress();
       if (labels.length) {
@@ -211,7 +265,7 @@ function renderGameOver(result, game) {
         retry.addEventListener('click', () => { retry.remove(); submit(); });
         row.prepend(retry);
       } else if (err.status === 401) {
-        status.textContent = 'Your login expired, so this score was not saved. Log in and play again.';
+        status.textContent = 'This browser is no longer signed in, so the score was not saved. Use your recovery code (Nickname button) and play again.';
       } else if (err.code === 'ALREADY_SUBMITTED') {
         status.textContent = 'This score was already saved.';
       } else {
@@ -223,13 +277,13 @@ function renderGameOver(result, game) {
 }
 
 // ---------------- progress (unlocks) ----------------
-// Logged-in players unlock things through verified server-side scores; guests through scores kept in this browser.
+// Unlocks come only from verified, saved scores of a player with a nickname. A guest always has the starting set.
 let progressFor = null; // id of the player whose server progress is applied
 async function syncProgress() {
   try {
     return window.PunisherGame.applyServerProgress(await api('/players/me/progress'));
   } catch {
-    return []; // offline: keep whatever is shown, the next login or game refreshes it
+    return []; // offline: keep whatever is shown, the next game refreshes it
   }
 }
 

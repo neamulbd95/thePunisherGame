@@ -3,9 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="A protest game against child abusers, snatchers and rapists in Bangladesh. Charge your force, nail the timing, punish harder each round. Log in to join the leaderboard.">
+<meta name="description" content="Bangla Punisher: a free protest game against child abusers, snatchers and rapists in Bangladesh. Charge your force, nail the timing, punish harder each round. Pick a nickname to join the leaderboard.">
+<meta name="application-name" content="Bangla Punisher">
+<meta property="og:site_name" content="Bangla Punisher">
+<meta property="og:title" content="Bangla Punisher – a game to raise your voice against abuse">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://the-bangla-punisher.cc/">
+<meta property="og:image" content="https://the-bangla-punisher.cc/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#12221e">
-<title>Slap the Abuser</title>
+<title>Bangla Punisher – a game to raise your voice against abuse</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Hind+Siliguri:wght@400;600;700&display=swap">
@@ -17,6 +26,7 @@
 
 <div class="top">
   <div class="title">
+    <p class="brand">Bangla Punisher</p>
     <h1 id="h1">Slap the <em>Snatcher</em></h1>
     <span class="bn" id="tag">অপরাধীর বিচার চাই</span>
   </div>
@@ -28,7 +38,7 @@
     <span class="chips">
       <button class="chip" id="change" type="button">Villain</button>
       <button class="chip" id="board" type="button">Board</button>
-      <button class="chip" id="account" type="button" aria-haspopup="dialog">Log in</button>
+      <button class="chip" id="account" type="button" aria-haspopup="dialog">Nickname</button>
       <button class="chip" id="mute" type="button">Sound on</button>
     </span>
   </div>
@@ -54,6 +64,8 @@
   <button class="act" id="act" type="button">HOLD TO CHARGE</button>
 </div>
 
+<footer class="site-foot">Bangla Punisher · a game against abuse · <a href="/privacy">Privacy policy</a></footer>
+
 <div id="live" class="sr-only" role="status" aria-live="polite"></div>
 
 <!-- Leaderboard / friends / account. All content is filled in with textContent (never innerHTML) by js/*.js -->
@@ -71,7 +83,6 @@
   <section id="panel-board" role="tabpanel" aria-labelledby="tab-board">
     <div class="seg" role="group" aria-label="Board" id="scopeSeg">
       <button type="button" data-scope="global" aria-pressed="true">Everyone</button>
-      <button type="button" data-scope="facebook" aria-pressed="false">Facebook friends</button>
       <button type="button" data-scope="game" aria-pressed="false">Game friends</button>
     </div>
     <div class="seg" role="group" aria-label="Period" id="periodSeg">
@@ -112,30 +123,54 @@
 
   <section id="panel-account" role="tabpanel" aria-labelledby="tab-account" hidden>
     <div id="acctGuest">
-      <p class="lead">Play as a guest, or log in to save scores, join the leaderboard and compare with friends. We only use your name (shortened) and profile picture.</p>
-      <button id="fbLogin" class="fb-btn" type="button">Continue with Facebook</button>
-      <p id="fbNote" class="state" role="status"></p>
-      <form id="devLogin" class="row" hidden>
-        <input id="devName" value="Dev Player" maxlength="30" aria-label="Dev player name">
-        <button class="ovbtn small" type="submit">Dev login (mock)</button>
+      <p class="lead">Playing as a guest works fine. To <b>save scores, join the leaderboard and unlock more</b>, pick a nickname. No email, no password: this browser remembers you, and a recovery code lets you continue on another device.</p>
+      <form id="regForm" class="row" autocomplete="off">
+        <label class="sr-only" for="regNick">Nickname</label>
+        <input id="regNick" maxlength="16" placeholder="Choose a nickname" autocapitalize="off" spellcheck="false">
+        <button class="ovbtn small" type="submit">Create</button>
       </form>
+      <p class="fine">3–16 letters, numbers, _ or -. You get a number tag, like <b>Rahim#4821</b>.</p>
+      <p id="regMsg" class="state" role="status"></p>
+      <details class="recover">
+        <summary>I already have a player</summary>
+        <form id="recoverForm" autocomplete="off">
+          <label class="sr-only" for="recHandle">Your name with the number tag</label>
+          <input id="recHandle" placeholder="Nickname#1234" spellcheck="false" autocapitalize="off">
+          <label class="sr-only" for="recCode">Recovery code</label>
+          <input id="recCode" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" spellcheck="false" autocapitalize="characters">
+          <button class="ovbtn small" type="submit">Continue as this player</button>
+        </form>
+      </details>
     </div>
+
     <div id="acctAuthed" hidden>
       <div class="who"><span id="acctAvatar" class="av big"></span><div><b id="acctName"></b><small id="acctSub"></small></div></div>
+
+      <div id="recoveryBox" class="recovery" hidden>
+        <p><b>Save your recovery code</b></p>
+        <output id="recoveryCode" class="code"></output>
+        <div class="btnrow">
+          <button class="chip" id="copyRecovery" type="button">Copy</button>
+          <button class="chip" id="downloadRecovery" type="button">Save as file</button>
+          <button class="chip" id="recoverySaved" type="button">I saved it</button>
+        </div>
+        <p class="fine">It is the only way to continue as this player on another device, or after clearing your browser. We cannot show it again.</p>
+      </div>
+
       <dl id="acctStats" class="stats-grid"></dl>
       <form id="nickForm" class="row">
-        <label class="sr-only" for="nickInput">Nickname</label>
-        <input id="nickInput" maxlength="24" placeholder="Nickname (shown on boards)">
-        <button class="ovbtn small" type="submit">Save</button>
+        <label class="sr-only" for="nickInput">New nickname</label>
+        <input id="nickInput" maxlength="16" placeholder="New nickname (you get a new tag)">
+        <button class="ovbtn small" type="submit">Change</button>
       </form>
-      <button id="fbFriendsBtn" class="chip wide" type="button" hidden>Enable Facebook friends board</button>
+      <button id="newCodeBtn" class="chip wide" type="button">Get a new recovery code</button>
       <p id="acctMsg" class="state" role="status"></p>
       <div class="btnrow">
-        <button class="ovbtn ghost small" id="logoutBtn" type="button">Log out</button>
-        <button class="ovbtn ghost small danger" id="deleteBtn" type="button">Delete my account</button>
+        <button class="ovbtn ghost small" id="logoutBtn" type="button">Sign out on this device</button>
+        <button class="ovbtn ghost small danger" id="deleteBtn" type="button">Delete my player</button>
       </div>
     </div>
-    <p class="fine"><a href="privacy.html">Privacy &amp; data deletion</a></p>
+    <p class="fine"><a href="/privacy">Privacy &amp; deleting your data</a></p>
   </section>
 </dialog>
 
