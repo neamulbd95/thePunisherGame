@@ -89,3 +89,4 @@ dialog button:focus-visible,dialog select:focus-visible,dialog input:focus-visib
 .ovbtn.fb{background:#1877f2;text-decoration:none;display:inline-block}
 a.ovbtn.small{padding:8px 16px}
 .site-foot{padding:4px 8px;line-height:1.35}
+.flag{width:1.15em;height:.75em;vertical-align:-.08em;display:inline-block;border-radius:1px}
