@@ -73,3 +73,17 @@ button:focus-visible{outline:3px solid var(--chalk);outline-offset:2px}
 .weapon.locked{opacity:.5;border-style:dashed;cursor:not-allowed}
 .unlocks{border:1.5px solid var(--gold);border-radius:10px;padding:6px 12px;background:rgba(242,177,52,.12);display:grid;gap:2px}
 .unlocks p{color:var(--gold);font-weight:600;font-size:.9rem}
+/* Landing text: balanced wrapping (no stranded single words) and the helplines one per line */
+.overlay .lead{text-wrap:balance}
+.helplines{display:grid;gap:3px;justify-items:center}
+.helplines p{max-width:none}
+.helplines b{color:var(--gold)}
+/* Centre the overlay content, but never clip it: when it is taller than the screen it starts at the top and scrolls */
+.overlay{justify-content:flex-start}
+.overlay h2{margin-top:auto}
+#ovBody{margin-bottom:auto}
+/* a little tighter so the landing screen fits without scrolling on most phones */
+.overlay{gap:7px;padding:12px 16px}
+.overlay .lead{font-size:.8rem;line-height:1.35}
+.card canvas{max-width:96px}
+.helplines{gap:1px}

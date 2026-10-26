@@ -222,10 +222,10 @@ function showSelect(){
   ovTitle.innerHTML='Who gets <em>punished</em>?';
   ovBody.innerHTML=`<p class="lead">A protest game. Pick a criminal, charge your force, and nail the timing. Clear ${STAGES} stages before the clock runs out. Every hit makes the next one harder.</p>
     <div class="cards" id="cards"></div>
-    <p class="lead progress-line">${progressFromServer?`Total score <b>${progress.total.toLocaleString()}</b>${nx?` · next unlock: ${nx.label} at ${nx.at.toLocaleString()}`:' · everything unlocked'}`:'Log in with Facebook to save your scores and unlock more villains, weapons and hit areas.'}</p>
+    <p class="lead progress-line">${progressFromServer?`Total score <b>${progress.total.toLocaleString()}</b><br>${nx?`Next unlock: ${nx.label} at ${nx.at.toLocaleString()}`:'Everything unlocked'}`:'Log in with Facebook to save your scores and unlock more villains, weapons and hit areas.'}</p>
     ${progressFromServer?'':'<button class="ovbtn small" id="loginHint" type="button">Log in to unlock</button>'}
-    <p class="lead">Hold to charge · release at the top · tap in the gold arc</p>
-    <p class="lead">If you or a child you know is in danger: <b>999</b> · Child helpline <b>1098</b> · Women &amp; children <b>109</b></p>`;
+    <p class="lead">Hold to charge · release at the top<br>Tap in the gold arc</p>
+    <div class="lead helplines"><p>If you or a child you know is in danger:</p><p><b>999</b> National Emergency</p><p><b>1098</b> Child helpline</p><p><b>109</b> Women &amp; children</p></div>`;
   const cards=$('cards');
   const lh=$('loginHint');if(lh)lh.addEventListener('click',()=>emit('ui:login'));
   Object.entries(VILLAINS).forEach(([k,v])=>{
