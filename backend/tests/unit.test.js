@@ -116,9 +116,10 @@ describe('stages and the clock', () => {
   it('unlock thresholds', () => {
     const p = (total, per = {}) => ({ total, per: { abuser: 0, robber: 0, rapist: 0, ...per } });
     expect(villainUnlocked(p(0), 'robber')).toBe(true);
-    expect(villainUnlocked(p(1999), 'abuser')).toBe(false);
-    expect(villainUnlocked(p(2000), 'abuser')).toBe(true);
-    expect(villainUnlocked(p(5000), 'rapist')).toBe(true);
+    expect(villainUnlocked(p(1499), 'abuser')).toBe(false);
+    expect(villainUnlocked(p(1500), 'abuser')).toBe(true);
+    expect(villainUnlocked(p(3499), 'rapist')).toBe(false);
+    expect(villainUnlocked(p(3500), 'rapist')).toBe(true);
     expect(weaponUnlocked(p(0), 'hand')).toBe(true);
     expect(weaponUnlocked(p(999), 'sandal')).toBe(false);
     expect(weaponUnlocked(p(15000), 'pan')).toBe(true);

@@ -24,7 +24,7 @@ export const WEAPONS = {
 };
 export const WEAPON_IDS = Object.keys(WEAPONS);
 // Villains unlock at a TOTAL score; the bottom kick unlocks per villain, at the score earned against that villain.
-export const VILLAIN_UNLOCK = { robber: 0, abuser: 2000, rapist: 5000 };
+export const VILLAIN_UNLOCK = { robber: 0, abuser: 1500, rapist: 3500 };
 export const KICK_UNLOCK = 1500;
 
 /** progress = { total, per: { abuser, robber, rapist } } built from accepted scores. */

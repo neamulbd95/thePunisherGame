@@ -351,12 +351,15 @@ describe('unlocks: villains, weapons and the bottom kick', () => {
 
   it('unlocks follow the verified total score', async () => {
     const { agent, player } = await loginAs(app, 'fb-1');
-    await grantScore(db, player.id, 'robber', 2000);
-    expect((await start(agent, { villain: 'abuser', weapon: 'sandal' })).status).toBe(201); // total 2000: Abuser and sandal
+    await grantScore(db, player.id, 'robber', 1500);
+    expect((await start(agent, { villain: 'abuser', weapon: 'sandal' })).status).toBe(201); // total 1500: the Abuser unlocks (and the sandal)
     expect((await start(agent, { villain: 'robber', weapon: 'broom' })).status).toBe(403); // broom needs 3000
-    expect((await start(agent, { villain: 'rapist' })).status).toBe(403); // needs 5000
+    expect((await start(agent, { villain: 'rapist' })).status).toBe(403); // needs 3500
     expect((await start(agent, { villain: 'robber', weapon: 'bamboo' })).status).toBe(403); // needs 6000
-    await grantScore(db, player.id, 'abuser', 4000); // total 6000
+    await grantScore(db, player.id, 'abuser', 2000); // total 3500: the Rapist unlocks, bamboo still needs 6000
+    expect((await start(agent, { villain: 'rapist' })).status).toBe(201);
+    expect((await start(agent, { villain: 'rapist', weapon: 'bamboo' })).status).toBe(403);
+    await grantScore(db, player.id, 'abuser', 2500); // total 6000
     expect((await start(agent, { villain: 'rapist', weapon: 'bamboo' })).status).toBe(201);
   });
 
@@ -367,7 +370,7 @@ describe('unlocks: villains, weapons and the bottom kick', () => {
     expect(res.body.data).toMatchObject({
       totalScore: 1600,
       villainScores: { robber: 1600, abuser: 0, rapist: 0 },
-      unlocked: { villains: ['robber'], weapons: ['hand', 'sandal'], kick: ['robber'] },
+      unlocked: { villains: ['abuser', 'robber'], weapons: ['hand', 'sandal'], kick: ['robber'] }, // 1,600 >= 1,500: the Abuser is open
     });
     expect((await request(app).get('/api/v1/players/me/progress')).status).toBe(401);
   });
