@@ -62,7 +62,7 @@ function row(p) {
   li.append(el('span', { class: 'rk', text: `#${p.rank}` }));
   li.append(avatarNode(p.avatarUrl));
   const name = el('span', { class: 'nm' }, el('b', { text: p.displayName }));
-  name.append(el('small', { text: VILLAIN_NAMES[p.villain] ?? '' }));
+  name.append(el('small', { text: `The Punisher for ${VILLAIN_NAMES[p.villain] ?? 'the criminal'}` }));
   li.append(name, el('span', { class: 'sc', text: p.bestScore.toLocaleString() }));
   return li;
 }
