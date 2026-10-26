@@ -442,6 +442,9 @@ describe('global leaderboard', () => {
     const robber = await request(app).get('/api/v1/leaderboards/global?villain=robber');
     expect(robber.body.data.players.map((p) => nick(p.displayName))).toEqual(['Bbb']);
     expect((await request(app).get('/api/v1/leaderboards/global?limit=1000')).status).toBe(422);
+    expect((await request(app).get('/api/v1/leaderboards/global?limit=21')).status).toBe(422);
+    expect((await request(app).get('/api/v1/leaderboards/global?limit=10&offset=15')).status).toBe(422); // cannot page past the top 20
+    expect((await request(app).get('/api/v1/leaderboards/global?offset=20')).status).toBe(422);
     expect((await request(app).get('/api/v1/leaderboards/global?period=yearly')).status).toBe(422);
   });
 
@@ -465,6 +468,24 @@ describe('global leaderboard', () => {
     expect(await total('monthly')).toBeLessThanOrEqual(2);
     expect(await total('daily')).toBe(1);
   });
+});
+
+describe('top 20 only', () => {
+  it('returns at most 20 players but still tells a player their own rank beyond the top 20', async () => {
+    const me = await loginAs(app, 'me', 'Last');
+    await playGame(db, me.agent, { spec: [['L', 'GOOD', 0.05]] }); // the lowest score
+    for (let i = 0; i < 23; i++) {
+      const p = await loginAs(app, 'p' + i, 'P' + String(i).padStart(2, '0'));
+      await playGame(db, p.agent, { spec: [['S', 'PERFECT', 1]] });
+    }
+    const res = await me.agent.get('/api/v1/leaderboards/global');
+    expect(res.status).toBe(200);
+    expect(res.body.data.players).toHaveLength(20);
+    expect(res.body.data.players.map((p) => p.rank)).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
+    expect(res.body.data.totalPlayers).toBe(24);
+    expect(res.body.data.myRank).toBe(24); // shown below the list in the game
+    expect(res.body.data.players.some((p) => p.isMe)).toBe(false);
+  }, 60_000);
 });
 
 describe('in-game friends', () => {

@@ -41,12 +41,16 @@ export const completeGameBody = z.strictObject({
 
 export const uuidParam = z.strictObject({ id: z.uuid() });
 
-export const leaderboardQuery = z.object({
-  period: z.enum(PERIODS).default('all-time'),
-  villain: z.enum(VILLAINS).optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(25),
-  offset: z.coerce.number().int().min(0).max(10_000).default(0),
-});
+// Boards show only the best players; nobody can page past the top 20.
+export const LEADERBOARD_TOP = 20;
+export const leaderboardQuery = z
+  .object({
+    period: z.enum(PERIODS).default('all-time'),
+    villain: z.enum(VILLAINS).optional(),
+    limit: z.coerce.number().int().min(1).max(LEADERBOARD_TOP).default(LEADERBOARD_TOP),
+    offset: z.coerce.number().int().min(0).max(LEADERBOARD_TOP - 1).default(0),
+  })
+  .refine((q) => q.offset + q.limit <= LEADERBOARD_TOP, { message: `Only the top ${LEADERBOARD_TOP} players are shown` });
 
 export const friendRequestBody = z.strictObject({
   friendCode: z
