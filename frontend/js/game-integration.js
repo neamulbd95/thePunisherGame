@@ -155,6 +155,7 @@ document.addEventListener('game:start', (e) => {
 });
 
 document.addEventListener('game:over', (e) => renderGameOver(e.detail, current));
+document.addEventListener('ui:login', () => openDialog('account')); // the landing screen's "Log in to unlock" button
 
 function renderGameOver(result, game) {
   const slot = $('socialSlot');
@@ -167,7 +168,7 @@ function renderGameOver(result, game) {
   slot.append(status, row);
 
   if (auth.status !== 'authed') {
-    status.textContent = 'Log in to save this score and join the leaderboard.';
+    status.textContent = 'Log in to save this score, join the leaderboard and unlock more villains, weapons and hit areas. Guests cannot unlock anything.';
     const login = el('button', { type: 'button', class: 'ovbtn small', text: 'Log in' });
     login.addEventListener('click', () => openDialog('account'));
     row.append(login, boardBtn);

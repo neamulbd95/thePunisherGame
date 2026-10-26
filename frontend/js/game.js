@@ -52,19 +52,14 @@ const KICK={word:'লাথি!',sWord:'লাথি!',bn:true},KICK_UNLOCK=1500
 
 // ---------- progress: what is unlocked ----------
 // Total score unlocks villains and weapons; the score earned against one villain unlocks the bottom kick on that villain.
-// Logged-in players get their progress from the server (verified scores); guests keep it in this browser.
-const PROG_KEY='slap-progress',WEAPON_KEY='slap-weapon';
+// Only LOGGED-IN players unlock anything: their progress comes from the server (verified, saved scores).
+// A guest always has the starting set (Snatcher, bare hand, no kick) whatever they score.
+const WEAPON_KEY='slap-weapon';
 const blankProgress=()=>({total:0,per:{abuser:0,robber:0,rapist:0}});
-function loadLocalProgress(){
-  try{const p=JSON.parse(localStorage.getItem(PROG_KEY));if(p&&Number.isFinite(p.total))return{total:p.total,per:{...blankProgress().per,...p.per}}}catch(e){}
-  return blankProgress();
-}
-function saveLocalProgress(p){try{localStorage.setItem(PROG_KEY,JSON.stringify(p))}catch(e){}}
-let progress=loadLocalProgress(),progressFromServer=false;
+let progress=blankProgress(),progressFromServer=false;
 const villainOpen=(k,p=progress)=>p.total>=VILLAINS[k].unlock;
 const weaponOpen=(w,p=progress)=>p.total>=WEAPONS[w].unlock;
 const kickOpen=(k,p=progress)=>(p.per[k]||0)>=KICK_UNLOCK;
-const addProgress=(p,vk,pts)=>({total:p.total+pts,per:{...p.per,[vk]:(p.per[vk]||0)+pts}});
 function unlockLabels(prev,next){
   const out=[];
   Object.entries(VILLAINS).forEach(([k,v])=>{if(!villainOpen(k,prev)&&villainOpen(k,next))out.push(`New villain: ${v.name}`)});
@@ -130,7 +125,7 @@ function hud(){
 function ui(){
   const act=$('act'),lock=S.phase==='charge'||S.phase==='timing';
   const kickOk=kickOpen(S.vk);
-  $('spotB').innerHTML=kickOk?`Bottom (kick)<small>×${SPOT_MULT.B.toFixed(1)} · key 4</small>`:`🔒 Bottom<small>${KICK_UNLOCK.toLocaleString()} pts on ${V().short}</small>`;
+  $('spotB').innerHTML=kickOk?`Bottom (kick)<small>×${SPOT_MULT.B.toFixed(1)} · key 4</small>`:`🔒 Bottom<small>${progressFromServer?`${KICK_UNLOCK.toLocaleString()} pts on ${V().short}`:'Log in'}</small>`;
   document.querySelectorAll('.spot').forEach(b=>{
     const locked=b.dataset.spot==='B'&&!kickOk;
     b.classList.toggle('locked',locked);b.setAttribute('aria-pressed',b.dataset.spot===S.spot);b.disabled=lock||locked;
@@ -227,14 +222,16 @@ function showSelect(){
   ovTitle.innerHTML='Who gets <em>punished</em>?';
   ovBody.innerHTML=`<p class="lead">A protest game. Pick a criminal, charge your force, and nail the timing. Clear ${STAGES} stages before the clock runs out. Every hit makes the next one harder.</p>
     <div class="cards" id="cards"></div>
-    <p class="lead progress-line">Total score <b>${progress.total.toLocaleString()}</b>${nx?` · next unlock: ${nx.label} at ${nx.at.toLocaleString()}`:' · everything unlocked'}</p>
+    <p class="lead progress-line">${progressFromServer?`Total score <b>${progress.total.toLocaleString()}</b>${nx?` · next unlock: ${nx.label} at ${nx.at.toLocaleString()}`:' · everything unlocked'}`:'Log in with Facebook to save your scores and unlock more villains, weapons and hit areas.'}</p>
+    ${progressFromServer?'':'<button class="ovbtn small" id="loginHint" type="button">Log in to unlock</button>'}
     <p class="lead">Hold to charge · release at the top · tap in the gold arc</p>
     <p class="lead">If you or a child you know is in danger: <b>999</b> · Child helpline <b>1098</b> · Women &amp; children <b>109</b></p>`;
   const cards=$('cards');
+  const lh=$('loginHint');if(lh)lh.addEventListener('click',()=>emit('ui:login'));
   Object.entries(VILLAINS).forEach(([k,v])=>{
     const open=villainOpen(k);
     const b=document.createElement('button');b.type='button';b.className='card'+(open?'':' locked');b.disabled=!open;
-    b.innerHTML=`<span class="nm">${v.name}</span><span class="bnm">${v.bn}</span><span class="wp">${open?`best ${getBest(k)}`:`🔒 ${v.unlock.toLocaleString()} pts`}</span>`;
+    b.innerHTML=`<span class="nm">${v.name}</span><span class="bnm">${v.bn}</span><span class="wp">${open?`best ${getBest(k)}`:`🔒 ${progressFromServer?`${v.unlock.toLocaleString()} pts`:'Log in to unlock'}`}</span>`;
     b.prepend(makeThumb(k));
     if(open)b.addEventListener('click',()=>{ensureAudio();showIntro(k)});
     cards.appendChild(b);
@@ -251,13 +248,13 @@ function showIntro(k,picked){
     <p class="lead">${STAGES} stages · ${TIME_LIMIT_MS/1000} seconds. Finish with time to spare for a bonus (+${TIME_BONUS_PER_SEC} per second left).</p>
     <p class="lead">Choose your weapon</p>
     <div class="weapons" id="weapons" role="group" aria-label="Weapon"></div>
-    <p class="lead">Special target: ${v.sName} (×${v.sMult.toFixed(1)}, tighter timing). ${kickOpen(k)?`Bottom kick unlocked (×${SPOT_MULT.B.toFixed(1)}, tightest timing).`:`Bottom kick: 🔒 score ${KICK_UNLOCK.toLocaleString()} against the ${v.short} to unlock (${per.toLocaleString()}/${KICK_UNLOCK.toLocaleString()}).`}</p>
+    <p class="lead">Special target: ${v.sName} (×${v.sMult.toFixed(1)}, tighter timing). ${kickOpen(k)?`Bottom kick unlocked (×${SPOT_MULT.B.toFixed(1)}, tightest timing).`:(progressFromServer?`Bottom kick: 🔒 score ${KICK_UNLOCK.toLocaleString()} against the ${v.short} to unlock (${per.toLocaleString()}/${KICK_UNLOCK.toLocaleString()}).`:'Bottom kick: 🔒 log in to unlock it.')}</p>
     <div class="btnrow"><button class="ovbtn" id="go" type="button">Start</button><button class="ovbtn ghost" id="back" type="button">Back</button></div>`;
   const grid=$('weapons');
   Object.entries(WEAPONS).forEach(([id,wp])=>{
     const open=weaponOpen(id),b=document.createElement('button');
     b.type='button';b.className='weapon'+(open?'':' locked');b.disabled=!open;b.setAttribute('aria-pressed',String(id===w));
-    b.innerHTML=`<b>${wp.n}</b><small>${open?`×${wp.mult.toFixed(2)}`:`🔒 ${wp.unlock.toLocaleString()} pts`}</small>`;
+    b.innerHTML=`<b>${wp.n}</b><small>${open?`×${wp.mult.toFixed(2)}`:`🔒 ${progressFromServer?`${wp.unlock.toLocaleString()} pts`:'Log in'}`}</small>`;
     if(open)b.addEventListener('click',()=>{setWeaponPref(id);showIntro(k,id)});
     grid.appendChild(b);
   });
@@ -273,14 +270,8 @@ function gameOver(reason){
   screen='over';
   let best=getBest(S.vk);
   if(S.score>best){best=S.score;setBest(S.vk,best);$('best').textContent=best}
-  // Guests: progress lives in this browser. Logged-in players: the server counts the verified score and
-  // js/game-integration.js reports the unlocks once it has been saved.
-  let unlockHtml='';
-  if(!progressFromServer){
-    const prev=progress;progress=addProgress(progress,S.vk,S.score);saveLocalProgress(progress);
-    const labels=unlockLabels(prev,progress);
-    if(labels.length)unlockHtml=`<div class="unlocks">${labels.map(l=>`<p>🔓 ${l}</p>`).join('')}</div>`;
-  }
+  // Unlocks are reported by js/game-integration.js once a logged-in player's score has been verified and saved.
+  const unlockHtml='';
   ovTitle.textContent=reason==='cleared'?`All ${STAGES} stages cleared!`:reason==='timeout'?'Time’s up!':'Game over';
   ovBody.innerHTML=`<p class="big">${S.score}</p><p class="lead">${v.name} · best ${best} · stage ${Math.min(S.level,STAGES)}/${STAGES}</p>
   ${reason==='cleared'?`<p class="lead">Time bonus +${S.bonus} (${secsLeft}s left)</p>`:''}
@@ -973,7 +964,7 @@ window.PunisherGame={
     refreshProgressUi();
     return unlockLabels(prev,progress);
   },
-  useLocalProgress(){progress=loadLocalProgress();progressFromServer=false;refreshProgressUi()},
+  useLocalProgress(){progress=blankProgress();progressFromServer=false;refreshProgressUi()},
   getProgress:()=>progress
 };
 newGame('robber');showSelect();
