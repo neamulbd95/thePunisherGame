@@ -33,7 +33,7 @@ export const weaponUnlocked = (progress, weapon) => progress.total >= WEAPONS[we
 export const kickUnlocked = (progress, villain) => (progress.per[villain] ?? 0) >= KICK_UNLOCK;
 export const MAX_MISSES = 3;
 export const MIN_FORCE = 0.05;
-export const STAGES = 15;
+export const STAGES = 12;
 export const TIME_LIMIT_MS = 60_000;
 export const TIME_BONUS_PER_SEC = 20;
 export const END_REASONS = ['lives', 'cleared', 'timeout'];

@@ -305,7 +305,7 @@ describe('stages, clock and time bonus', () => {
     expect(done.status).toBe(200);
     expect(done.body.data.score).toBe(run.score);
     const row = (await db.query('SELECT score, rounds, validation_status FROM game_scores')).rows[0];
-    expect(row).toMatchObject({ score: run.score, rounds: 15, validation_status: 'accepted' });
+    expect(row).toMatchObject({ score: run.score, rounds: 12, validation_status: 'accepted' });
   });
 
   it('rejects a forged time bonus on a cleared game', async () => {
