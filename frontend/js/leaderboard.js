@@ -5,7 +5,7 @@ import { state as auth } from './session.js';
 
 const $ = (id) => document.getElementById(id);
 const VILLAIN_NAMES = { abuser: 'Child Abuser', robber: 'Snatcher', rapist: 'Rapist' };
-const PAGE = 15;
+const TOP = 20; // the board shows only the best players
 
 const view = { scope: 'global', period: 'all-time', villain: '', offset: 0, token: 0 };
 
@@ -67,30 +67,25 @@ function row(p) {
   return li;
 }
 
-export async function loadBoard({ append = false } = {}) {
+export async function loadBoard() {
   const my = ++view.token;
   const list = $('boardList');
-  const more = $('boardMore');
-  if (!append) {
-    view.offset = 0;
-    list.replaceChildren();
-    $('boardMe').textContent = '';
-  }
-  more.hidden = true;
+  list.replaceChildren();
+  $('boardMe').textContent = '';
 
   if (view.scope !== 'global' && auth.status !== 'authed') {
     setState('Log in to see your friends’ scores.', 'info');
     return;
   }
   setState('Loading…', 'loading');
-  const qs = new URLSearchParams({ period: view.period, limit: String(PAGE), offset: String(view.offset) });
+  const qs = new URLSearchParams({ period: view.period, limit: String(TOP) });
   if (view.villain) qs.set('villain', view.villain);
   const path = { global: '/leaderboards/global', game: '/leaderboards/game-friends' }[view.scope];
 
   try {
     const data = await api(`${path}?${qs}`);
     if (my !== view.token) return; // a newer request superseded this one
-    if (!data.players.length && !append) {
+    if (!data.players.length) {
       setState(
         view.scope === 'global' ? 'No scores yet for this filter. Be the first to punish!' : 'No friends with scores yet. Invite some from the Friends tab.',
         'info',
@@ -99,8 +94,6 @@ export async function loadBoard({ append = false } = {}) {
     }
     setState('');
     data.players.forEach((p) => list.append(row(p)));
-    view.offset += data.players.length;
-    more.hidden = view.offset >= data.totalPlayers;
     if (auth.status === 'authed') {
       $('boardMe').textContent = data.myRank
         ? `You: #${data.myRank} of ${data.totalPlayers} · best ${data.myScore.toLocaleString()}`
@@ -135,7 +128,6 @@ export function initBoard() {
     view.villain = e.target.value;
     loadBoard();
   });
-  $('boardMore').addEventListener('click', () => loadBoard({ append: true }));
 }
 
 // ---------------- friends ----------------
