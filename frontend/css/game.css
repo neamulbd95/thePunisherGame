@@ -44,9 +44,9 @@ h1 em{font-style:normal;color:var(--red)}
 .btnrow{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
 .ovbtn{font-family:var(--display);font-size:1.05rem;letter-spacing:.06em;background:var(--red);color:var(--chalk);border:0;border-radius:999px;padding:11px 22px;cursor:pointer}
 .ovbtn.ghost{background:transparent;border:1.5px solid rgba(244,239,228,.4)}
-.spots{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.spot{font-family:var(--body);font-weight:600;font-size:.85rem;background:transparent;color:var(--chalk);
-  border:1.5px solid rgba(244,239,228,.3);border-radius:10px;padding:7px 4px;cursor:pointer;line-height:1.2}
+.spots{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.spot{font-family:var(--body);font-weight:600;font-size:.74rem;background:transparent;color:var(--chalk);
+  border:1.5px solid rgba(244,239,228,.3);border-radius:10px;padding:7px 2px;cursor:pointer;line-height:1.2}
 .spot small{display:block;font-weight:400;color:var(--muted);font-size:.7rem}
 .spot[aria-pressed="true"]{background:var(--gold);color:var(--board-deep);border-color:var(--gold)}
 .spot[aria-pressed="true"] small{color:var(--board-deep)}
@@ -57,3 +57,19 @@ h1 em{font-style:normal;color:var(--red)}
 button:focus-visible{outline:3px solid var(--chalk);outline-offset:2px}
 /* Hit-spot picker and the charge button only exist while a villain is being played (overlay closed). visibility keeps the layout from jumping. */
 .controls.is-off{visibility:hidden}
+/* Locked / unlockable things */
+.spot.locked{border-style:dashed;color:var(--muted)}
+.spot.locked small{color:var(--muted)}
+.card.locked{opacity:.55;cursor:not-allowed}
+.card.locked canvas{filter:grayscale(1) brightness(.55)}
+.card:disabled{cursor:not-allowed}
+.progress-line{color:var(--gold)}
+.weapons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;width:100%;max-width:380px}
+.weapon{background:#1a2c27;border:1.5px solid rgba(244,239,228,.25);border-radius:10px;color:var(--chalk);padding:7px 3px;cursor:pointer;font-family:var(--body);line-height:1.15}
+.weapon b{display:block;font-size:.8rem;font-weight:600}
+.weapon small{color:var(--muted);font-size:.68rem}
+.weapon[aria-pressed="true"]{background:var(--gold);color:var(--board-deep);border-color:var(--gold)}
+.weapon[aria-pressed="true"] small{color:var(--board-deep)}
+.weapon.locked{opacity:.5;border-style:dashed;cursor:not-allowed}
+.unlocks{border:1.5px solid var(--gold);border-radius:10px;padding:6px 12px;background:rgba(242,177,52,.12);display:grid;gap:2px}
+.unlocks p{color:var(--gold);font-weight:600;font-size:.9rem}

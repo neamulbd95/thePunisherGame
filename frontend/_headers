@@ -3,7 +3,7 @@
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://connect.facebook.net; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data: https://*.fbcdn.net https://*.facebook.com; connect-src 'self' https://api.the-bangla-punisher.cc https://*.facebook.com; frame-src https://www.facebook.com https://web.facebook.com; base-uri 'self'; form-action 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://connect.facebook.net; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data: https://*.fbcdn.net https://*.fbsbx.com https://*.facebook.com; connect-src 'self' https://api.the-bangla-punisher.cc https://*.facebook.com; frame-src https://www.facebook.com https://web.facebook.com; base-uri 'self'; form-action 'self'; object-src 'none'
 
 /js/*
   Cache-Control: public, max-age=300, must-revalidate

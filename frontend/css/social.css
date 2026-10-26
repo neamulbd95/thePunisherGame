@@ -30,8 +30,10 @@ input{flex:1}
 .board-row{display:grid;grid-template-columns:2.6em 28px 1fr auto;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:rgba(244,239,228,.05)}
 .board-row.me{background:rgba(242,177,52,.18);outline:1.5px solid var(--gold)}
 .board-row .rk{font-family:var(--display);color:var(--gold);font-size:1rem}
-.board-row .av{width:28px;height:28px;border-radius:50%;background:#2c4a41;display:grid;place-items:center;overflow:hidden;font-weight:700;font-size:.8rem}
-.board-row .av img{width:100%;height:100%;object-fit:cover;display:block}
+.av{width:28px;height:28px;border-radius:50%;background:#2c4a41;display:grid;place-items:center;overflow:hidden;flex:none}
+.av.big{width:48px;height:48px}
+.av img{width:100%;height:100%;object-fit:cover;display:block}
+.av svg{width:78%;height:78%;fill:#a9bfb6}
 .board-row .nm{min-width:0;display:grid;line-height:1.15}
 .board-row .nm b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 .board-row .nm small{color:var(--muted);font-size:.68rem}
@@ -46,7 +48,6 @@ input{flex:1}
 .plain .empty{color:var(--muted);font-size:.82rem;padding:4px 2px}
 
 .who{display:flex;gap:12px;align-items:center;margin-bottom:10px}
-.who img{border-radius:50%}
 .who b{display:block;font-size:1.05rem}
 .who small{color:var(--muted)}
 .stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:0 0 12px}

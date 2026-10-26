@@ -20,6 +20,36 @@ function el(tag, props = {}, ...kids) {
   return n;
 }
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** Generic user silhouette, built with DOM calls (no innerHTML). */
+function defaultAvatar() {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  const head = document.createElementNS(SVG_NS, 'circle');
+  head.setAttribute('cx', '12'); head.setAttribute('cy', '8.5'); head.setAttribute('r', '4');
+  const body = document.createElementNS(SVG_NS, 'path');
+  body.setAttribute('d', 'M3.5 21c.6-4.6 4-7 8.5-7s7.9 2.4 8.5 7z');
+  svg.append(head, body);
+  return svg;
+}
+
+/** Profile picture, or the default icon when there is none or it fails to load (blocked, expired, offline). */
+export function avatarNode(url, extraClass = '') {
+  const av = el('span', { class: `av ${extraClass}`.trim() });
+  const fallback = () => av.replaceChildren(defaultAvatar());
+  if (typeof url === 'string' && /^https:\/\//.test(url)) {
+    const img = el('img', { alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' });
+    img.addEventListener('error', fallback, { once: true });
+    img.src = url;
+    av.append(img);
+  } else {
+    fallback();
+  }
+  return av;
+}
+
 function setState(msg, kind = '') {
   const s = $('boardState');
   s.textContent = msg;
@@ -30,15 +60,7 @@ function setState(msg, kind = '') {
 function row(p) {
   const li = el('li', { class: `board-row${p.isMe ? ' me' : ''}` });
   li.append(el('span', { class: 'rk', text: `#${p.rank}` }));
-  const av = el('span', { class: 'av' });
-  if (p.avatarUrl && /^https:\/\//.test(p.avatarUrl)) {
-    const img = el('img', { alt: '', width: 28, height: 28, loading: 'lazy', referrerpolicy: 'no-referrer' });
-    img.src = p.avatarUrl;
-    av.append(img);
-  } else {
-    av.textContent = (p.displayName || '?').slice(0, 1).toUpperCase();
-  }
-  li.append(av);
+  li.append(avatarNode(p.avatarUrl));
   const name = el('span', { class: 'nm' }, el('b', { text: p.displayName }));
   name.append(el('small', { text: VILLAIN_NAMES[p.villain] ?? '' }));
   li.append(name, el('span', { class: 'sc', text: p.bestScore.toLocaleString() }));

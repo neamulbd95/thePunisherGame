@@ -12,58 +12,104 @@ new ResizeObserver(fit).observe(stage);fit();
 
 // ---------- villains ----------
 const VILLAINS={
-  abuser:{name:'Child Abuser',bn:'শিশু নির্যাতনকারী',weapon:'hand',weaponName:'Slap',verb:'Slap',title:['Slap the ','Abuser'],
+  abuser:{name:'Child Abuser',short:'Abuser',unlock:2000,bn:'শিশু নির্যাতনকারী',
     base:170,board:'#1f3a33',chalk:['শিশু নির্যাতন অপরাধ','চুপ থাকবো না'],
     sName:'Back of head',sMult:1.6,sTight:.75,sPt:[180,156],sPath:'back',
-    word:'SLAP!',sWord:'THWACK!',bnWord:false,
     ouch:['Ouch!','Maaf koren!','Ami kichu kori nai!','Ar korbo na!'],
     perfBn:['ওরে বাবারে!','মাফ করে দাও!','আর করুম না!','উফফ, আমার দাঁত!'],missBn:['হিহিহি, লাগে নাই!','ধরতে পারবা না!','ভুল নিশানা!'],
     voice:{pitch:1.9,rate:1.15},
     help:[['1098','Child Helpline (toll-free)'],['999','National Emergency']],
     intro:'A fraud who abuses children while hiding behind religious dress. This game targets abusers, not faith.'},
-  robber:{name:'Snatcher',bn:'ছিনতাইকারী',weapon:'shoe',weaponName:'Shoe',verb:'Shoe-beat',title:['Shoe the ','Snatcher'],
+  robber:{name:'Snatcher',short:'Snatcher',unlock:0,bn:'ছিনতাইকারী',
     base:190,board:'#1b2236',chalk:['ছিনতাই রুখে দাও','নিরাপদ রাস্তা চাই'],
     sName:'Snatching hand',sMult:1.6,sTight:.75,sPt:[284,300],sPath:'hand',
-    word:'জুতা পেটা!',sWord:'জুতা পেটা!',bnWord:true,
     ouch:['Bhai, phone ferot dichhi!','Ar chhintai korbo na!','Ouch!','Maaf koren!'],perfBn:['ভাই, ফোন ফেরত দিচ্ছি!','ওরে মা গো!','আর ছিনতাই করুম না!','আমার ক্যাপ!'],missBn:['ধরতে পারবা না, হা হা!','ধীরে ভাই, ধীরে!','দৌড়ে আয়!'],
     voice:{pitch:1.25,rate:1.35},
     help:[['999','National Emergency (police)']],
-    intro:'The street snatcher who grabs phones and bags from rickshaws. Punish him with a chappal.'},
-  rapist:{name:'Rapist',bn:'ধর্ষক',weapon:'broom',weaponName:'Broom',verb:'Broom-beat',title:['Broom the ','Rapist'],
+    intro:'The street snatcher who grabs phones and bags from rickshaws. Make him regret it.'},
+  rapist:{name:'Rapist',short:'Rapist',unlock:5000,bn:'ধর্ষক',
     base:200,board:'#3a1d22',chalk:['ধর্ষকের সর্বোচ্চ শাস্তি চাই','বিচার চাই'],
     sName:'Top of head',sMult:1.6,sTight:.75,sPt:[180,112],sPath:'top',
-    word:'ঝাড়ু পেটা!',sWord:'ঝাড়ু পেটা!',bnWord:true,
     ouch:['Amar mama ke chenen?','Ami nirdosh!','Aaargh!','Maaf koren!'],perfBn:['আমার মামাকে চেনেন?','আমি নির্দোষ!','আমার চশমা!','আরে আরে, থামুন!'],missBn:['কিছুই হবে না আমার!','হা হা হা, লাগেনি!','আমার অনেক ক্ষমতা!'],
     voice:{pitch:.55,rate:.8},
     help:[['109','Helpline for violence against women & children (toll-free)'],['999','National Emergency']],
-    intro:'The smug, "well-connected" criminal who thinks nothing will happen to him. Give him the jharu.'}
+    intro:'The smug, "well-connected" criminal who thinks nothing will happen to him. Show him that something will happen.'}
 };
 const GRADES=[{n:'PERFECT',f:.3,m:1.5,c:'#f2b134'},{n:'GREAT',f:.65,m:1.2,c:'#f4efe4'},{n:'GOOD',f:1,m:1,c:'#9fd3c0'}];
-// A session is STAGES successful hits against a clock. Keep these three in sync with backend/src/utils/game-rules.js.
-const STAGES=10,TIME_LIMIT_MS=60000,TIME_BONUS_PER_SEC=20;
+// A session is STAGES successful hits against a clock. Keep the constants in this block in sync with backend/src/utils/game-rules.js.
+const STAGES=15,TIME_LIMIT_MS=60000,TIME_BONUS_PER_SEC=20;
+// Weapons are chosen before a game. Each unlocks at a TOTAL score and adds a small score multiplier.
+const WEAPONS={
+  hand:{n:'Bare hand',verb:'Slap',title:'Slap',mult:1,unlock:0,word:'SLAP!',sWord:'THWACK!',bn:false},
+  sandal:{n:'Sandal',verb:'Shoe-beat',title:'Shoe',mult:1.05,unlock:1000,word:'জুতা পেটা!',sWord:'জুতা পেটা!',bn:true},
+  broom:{n:'Broom',verb:'Broom-beat',title:'Broom',mult:1.1,unlock:3000,word:'ঝাড়ু পেটা!',sWord:'ঝাড়ু পেটা!',bn:true},
+  bamboo:{n:'Bamboo stick',verb:'Whack',title:'Whack',mult:1.15,unlock:6000,word:'বাঁশ পেটা!',sWord:'বাঁশ পেটা!',bn:true},
+  belan:{n:'Rolling pin',verb:'Bonk',title:'Bonk',mult:1.2,unlock:10000,word:'BONK!',sWord:'BONK!',bn:false},
+  pan:{n:'Frying pan',verb:'Clang',title:'Clang',mult:1.25,unlock:15000,word:'CLANG!',sWord:'CLANG!',bn:false}
+};
+// The bottom area is hit with a kick (no weapon, so no weapon multiplier). It unlocks per villain.
+const KICK={word:'লাথি!',sWord:'লাথি!',bn:true},KICK_UNLOCK=1500,SPOT_MULT={L:1,R:1,B:2};
+
+// ---------- progress: what is unlocked ----------
+// Total score unlocks villains and weapons; the score earned against one villain unlocks the bottom kick on that villain.
+// Logged-in players get their progress from the server (verified scores); guests keep it in this browser.
+const PROG_KEY='slap-progress',WEAPON_KEY='slap-weapon';
+const blankProgress=()=>({total:0,per:{abuser:0,robber:0,rapist:0}});
+function loadLocalProgress(){
+  try{const p=JSON.parse(localStorage.getItem(PROG_KEY));if(p&&Number.isFinite(p.total))return{total:p.total,per:{...blankProgress().per,...p.per}}}catch(e){}
+  return blankProgress();
+}
+function saveLocalProgress(p){try{localStorage.setItem(PROG_KEY,JSON.stringify(p))}catch(e){}}
+let progress=loadLocalProgress(),progressFromServer=false;
+const villainOpen=(k,p=progress)=>p.total>=VILLAINS[k].unlock;
+const weaponOpen=(w,p=progress)=>p.total>=WEAPONS[w].unlock;
+const kickOpen=(k,p=progress)=>(p.per[k]||0)>=KICK_UNLOCK;
+const addProgress=(p,vk,pts)=>({total:p.total+pts,per:{...p.per,[vk]:(p.per[vk]||0)+pts}});
+function unlockLabels(prev,next){
+  const out=[];
+  Object.entries(VILLAINS).forEach(([k,v])=>{if(!villainOpen(k,prev)&&villainOpen(k,next))out.push(`New villain: ${v.name}`)});
+  Object.entries(WEAPONS).forEach(([k,w])=>{if(!weaponOpen(k,prev)&&weaponOpen(k,next))out.push(`New weapon: ${w.n}`)});
+  Object.entries(VILLAINS).forEach(([k,v])=>{if(!kickOpen(k,prev)&&kickOpen(k,next))out.push(`Bottom kick unlocked on the ${v.short}`)});
+  return out;
+}
+function nextUnlock(){
+  const c=[];
+  Object.values(VILLAINS).forEach(v=>{if(progress.total<v.unlock)c.push({at:v.unlock,label:v.name})});
+  Object.values(WEAPONS).forEach(w=>{if(progress.total<w.unlock)c.push({at:w.unlock,label:w.n})});
+  c.sort((a,b)=>a.at-b.at);return c[0]||null;
+}
+function chosenWeapon(){
+  let w='hand';try{w=localStorage.getItem(WEAPON_KEY)||'hand'}catch(e){}
+  return WEAPONS[w]&&weaponOpen(w)?w:'hand';
+}
+function setWeaponPref(w){try{localStorage.setItem(WEAPON_KEY,w)}catch(e){}}
 const bestKey=k=>'slap-best-'+k;
 function getBest(k){try{return +localStorage.getItem(bestKey(k))||0}catch(e){return 0}}
 function setBest(k,v){try{localStorage.setItem(bestKey(k),v)}catch(e){}}
 
 let S=null;
-function newGame(vk){
-  S={phase:'ready',vk,score:0,combo:0,misses:0,level:0,spot:(S&&S.vk===vk&&S.spot)||'L',power:0,chargeT:0,locked:0,
-     log:[],timerOn:false,timeLeft:TIME_LIMIT_MS,cleared:false,finalLeft:0,bonus:0,needle:0,zone:0,dir:1,speed:0,wobble:false,travel:0,t:0,anim:null,red:{L:0,R:0,S:0},turn:0,ts:1,drop:null,stars:[],last:null,bubble:null,shake:0};
+function newGame(vk,weapon='hand'){
+  const keep=(S&&S.vk===vk&&S.spot)||'L';
+  S={phase:'ready',vk,weapon:WEAPONS[weapon]&&weaponOpen(weapon)?weapon:'hand',score:0,combo:0,misses:0,level:0,spot:keep==='B'&&!kickOpen(vk)?'L':keep,power:0,chargeT:0,locked:0,
+     log:[],timerOn:false,timeLeft:TIME_LIMIT_MS,cleared:false,finalLeft:0,bonus:0,needle:0,zone:0,dir:1,speed:0,wobble:false,travel:0,t:0,anim:null,red:{L:0,R:0,S:0,B:0},turn:0,turnB:0,ts:1,drop:null,stars:[],last:null,bubble:null,shake:0};
   const v=VILLAINS[vk];
-  $('h1').innerHTML=`${v.title[0]}<em>${v.title[1]}</em>`;
-  $('spotS').innerHTML=`${v.sName}<small>×${v.sMult.toFixed(1)} · tighter · key 3</small>`;
+  $('h1').innerHTML=`${WEAPONS[S.weapon].title} the <em>${v.short}</em>`;
+  $('spotS').innerHTML=`${v.sName}<small>×${v.sMult.toFixed(1)} · key 3</small>`;
   $('best').textContent=getBest(vk);
   hud();ui();
 }
 const V=()=>VILLAINS[S.vk];
-const spotInfo=sp=>sp==='S'?{name:V().sName,mult:V().sMult}:{name:sp==='L'?'Left cheek':'Right cheek',mult:1};
-const zoneHalf=()=>Math.max(7,38-S.level*2.6)*(S.spot==='S'?V().sTight:1);
-// the PERFECT window shrinks every stage (11.4° -> 3.5°) while the needle gets faster, so late stages are brutal
-const perfectHalf=()=>Math.max(3.5,11.4-S.level*.9)*(S.spot==='S'?V().sTight:1);
+const spotMult=sp=>sp==='S'?V().sMult:SPOT_MULT[sp]||1;
+const spotTight=sp=>sp==='S'?V().sTight:sp==='B'?.7:1;
+const spotInfo=sp=>sp==='S'?{name:V().sName,mult:V().sMult}:sp==='B'?{name:'Bottom (kick)',mult:SPOT_MULT.B}:{name:sp==='L'?'Left cheek':'Right cheek',mult:1};
+const weaponMult=(sp)=>sp==='B'?1:WEAPONS[S.weapon].mult;
+const zoneHalf=()=>Math.max(10,38-S.level*2.2)*spotTight(S.spot);
+// the PERFECT window shrinks every stage (11.4° -> 3°) while the needle gets faster, so late stages are brutal
+const perfectHalf=()=>Math.max(3,11.4-S.level*.7)*spotTight(S.spot);
 const angDiff=(a,b)=>{let d=Math.abs(a-b)%360;return d>180?360-d:d};
 const sstep=x=>{x=Math.max(0,Math.min(1,x));return x*x*(3-2*x)};
 const easeOutBack=x=>1+2.70158*Math.pow(x-1,3)+1.70158*Math.pow(x-1,2);
-const hitPoint=a=>a.spot==='L'?[148,196]:a.spot==='R'?[212,196]:V().sPt;
+const hitPoint=a=>a.spot==='L'?[148,196]:a.spot==='R'?[212,196]:a.spot==='B'?[180,370]:V().sPt;
 const isPerfect=a=>!!(a&&a.hit&&a.g.n==='PERFECT');
 // camera push-in envelope for a perfect hit: eases in during the wind-up, holds, then relaxes
 const perfEnv=a=>isPerfect(a)&&!reduceMotion?sstep((a.t-.03)/.1)*(1-sstep((a.t-.5)/.45)):0;
@@ -83,9 +129,15 @@ function hud(){
 }
 function ui(){
   const act=$('act'),lock=S.phase==='charge'||S.phase==='timing';
-  document.querySelectorAll('.spot').forEach(b=>{b.setAttribute('aria-pressed',b.dataset.spot===S.spot);b.disabled=lock});
+  const kickOk=kickOpen(S.vk);
+  $('spotB').innerHTML=kickOk?`Bottom (kick)<small>×${SPOT_MULT.B.toFixed(1)} · key 4</small>`:`🔒 Bottom<small>${KICK_UNLOCK.toLocaleString()} pts on ${V().short}</small>`;
+  document.querySelectorAll('.spot').forEach(b=>{
+    const locked=b.dataset.spot==='B'&&!kickOk;
+    b.classList.toggle('locked',locked);b.setAttribute('aria-pressed',b.dataset.spot===S.spot);b.disabled=lock||locked;
+  });
   act.classList.toggle('go',S.phase==='timing');
-  act.textContent=S.phase==='charge'?'RELEASE AT THE TOP':S.phase==='timing'?`TAP — ${V().verb.toUpperCase()}!`:S.phase==='anim'?'…':'HOLD TO CHARGE';
+  const verb=S.spot==='B'?'Kick':WEAPONS[S.weapon].verb;
+  act.textContent=S.phase==='charge'?'RELEASE AT THE TOP':S.phase==='timing'?`TAP — ${verb.toUpperCase()}!`:S.phase==='anim'?'…':'HOLD TO CHARGE';
 }
 
 // ---------- actions ----------
@@ -97,7 +149,7 @@ function release(){
   if(S.phase!=='charge')return;
   S.locked=S.power;S.phase='timing';
   S.needle=Math.random()*360;S.zone=(S.needle+110+Math.random()*140)%360;
-  S.speed=Math.min(720,V().base*(1+S.level*.26));S.dir=S.level>=3&&Math.random()<.5?-1:1;S.wobble=S.level>=6;S.travel=0;S.t=0;
+  S.speed=Math.min(560,V().base*(1+S.level*.17));S.dir=S.level>=4&&Math.random()<.5?-1:1;S.wobble=S.level>=8;S.travel=0;S.t=0;
   ui();
 }
 function resolve(d){
@@ -105,7 +157,8 @@ function resolve(d){
   if(g){
     // rounded to 4 decimals so the server can replay the exact same score from the round log
     const force=Math.round(Math.max(.05,S.locked*(1-.35*d/half))*1e4)/1e4;
-    const pts=Math.round(100*force*g.m*spotInfo(S.spot).mult*(1+S.combo*.15));
+    // same operation order as the server (backend/src/utils/game-rules.js roundScore) so both round identically
+    const pts=Math.round(100*force*g.m*spotInfo(S.spot).mult*weaponMult(S.spot)*(1+S.combo*.15));
     S.score+=pts;S.combo++;S.level++;S.log.push({spot:S.spot,grade:g.n,force});
     if(S.level>=STAGES){S.cleared=true;S.finalLeft=Math.max(0,Math.floor(S.timeLeft));S.timerOn=false} // clock stops on the winning hit
     S.last={txt:`${g.n} · ${Math.round(force*100)}% force · +${pts}`,c:g.c};
@@ -120,7 +173,7 @@ function resolve(d){
 function impact(){
   const a=S.anim,v=V(),pt=hitPoint(a),perfect=isPerfect(a);
   if(a.hit){
-    sfxHit(v.weapon,a.force);
+    sfxHit(a.spot==='B'?'kick':S.weapon,a.force);
     S.shake=reduceMotion?0:perfect?.35:.12+.25*a.force;
     if(a.spot!=='S'||S.vk==='abuser')S.red[a.spot]=Math.min(1,S.red[a.spot]+.3+.35*a.force);
     for(let i=0;i<(perfect?14:7);i++){const an=Math.random()*Math.PI*2,sp=60+Math.random()*120;
@@ -135,7 +188,7 @@ function impact(){
     }
     const dir=a.spot==='R'?-1:1;
     if(S.vk==='robber'&&a.spot==='S')S.drop={kind:'phone',x:0,y:0,vx:120,vy:-240,r:0};
-    else if(perfect){
+    else if(perfect&&a.spot!=='B'){
       if(S.vk==='abuser')S.drop={kind:'cap',x:0,y:0,vx:dir*140,vy:-280,r:0};
       else if(S.vk==='robber')S.drop={kind:'cap',x:0,y:0,vx:dir*140,vy:-280,r:0};
       else S.drop={kind:'glasses',x:0,y:0,vx:dir*160,vy:-250,r:0};
@@ -148,7 +201,11 @@ function impact(){
 }
 // Social layer hooks: js/game-integration.js listens for these. The game itself never touches the network.
 const emit=(name,detail)=>document.dispatchEvent(new CustomEvent(name,{detail}));
-function begin(vk){newGame(vk);S.timerOn=true;ov.hidden=true;emit('game:start',{villain:vk})}
+let screen=null; // which overlay screen is showing: 'select' | 'intro' | 'over' | null (playing)
+function begin(vk,weapon){
+  newGame(vk,weapon);S.timerOn=true;screen=null;ov.hidden=true;setWeaponPref(S.weapon);
+  emit('game:start',{villain:vk,weapon:S.weapon});
+}
 function endAnim(){
   S.anim=null;S.drop=null;S.power=0;
   if(S.cleared){gameOver('cleared');return}
@@ -165,30 +222,46 @@ new MutationObserver(syncControls).observe(ov,{attributes:true,attributeFilter:[
 syncControls();
 function showSelect(){
   if(S)S.phase='start';
+  screen='select';
+  const nx=nextUnlock();
   ovTitle.innerHTML='Who gets <em>punished</em>?';
-  ovBody.innerHTML=`<p class="lead">A protest game. Pick a criminal, charge your force, and nail the timing. Clear 10 stages before the clock runs out. Every hit makes the next one harder.</p>
+  ovBody.innerHTML=`<p class="lead">A protest game. Pick a criminal, charge your force, and nail the timing. Clear ${STAGES} stages before the clock runs out. Every hit makes the next one harder.</p>
     <div class="cards" id="cards"></div>
+    <p class="lead progress-line">Total score <b>${progress.total.toLocaleString()}</b>${nx?` · next unlock: ${nx.label} at ${nx.at.toLocaleString()}`:' · everything unlocked'}</p>
     <p class="lead">Hold to charge · release at the top · tap in the gold arc</p>
     <p class="lead">If you or a child you know is in danger: <b>999</b> · Child helpline <b>1098</b> · Women &amp; children <b>109</b></p>`;
   const cards=$('cards');
   Object.entries(VILLAINS).forEach(([k,v])=>{
-    const b=document.createElement('button');b.type='button';b.className='card';
-    b.innerHTML=`<span class="nm">${v.name}</span><span class="bnm">${v.bn}</span><span class="wp">${v.weaponName} · best ${getBest(k)}</span>`;
+    const open=villainOpen(k);
+    const b=document.createElement('button');b.type='button';b.className='card'+(open?'':' locked');b.disabled=!open;
+    b.innerHTML=`<span class="nm">${v.name}</span><span class="bnm">${v.bn}</span><span class="wp">${open?`best ${getBest(k)}`:`🔒 ${v.unlock.toLocaleString()} pts`}</span>`;
     b.prepend(makeThumb(k));
-    b.addEventListener('click',()=>{ensureAudio();showIntro(k)});
+    if(open)b.addEventListener('click',()=>{ensureAudio();showIntro(k)});
     cards.appendChild(b);
   });
   ov.hidden=false;
   if(S)ui();
 }
-function showIntro(k){
-  const v=VILLAINS[k];
-  ovTitle.innerHTML=`${v.title[0]}<em>${v.title[1]}</em>`;
+function showIntro(k,picked){
+  screen='intro';
+  const v=VILLAINS[k],w=picked&&weaponOpen(picked)?picked:chosenWeapon();
+  ovTitle.innerHTML=`${WEAPONS[w].title} the <em>${v.short}</em>`;
+  const per=progress.per[k]||0;
   ovBody.innerHTML=`<p class="bn" style="font-size:1rem">${v.bn}</p><p>${v.intro}</p>
     <p class="lead">${STAGES} stages · ${TIME_LIMIT_MS/1000} seconds. Finish with time to spare for a bonus (+${TIME_BONUS_PER_SEC} per second left).</p>
-    <p class="lead">Weapon: ${v.weaponName}. Special target: ${v.sName} (×${v.sMult.toFixed(1)}, tighter timing).</p>
+    <p class="lead">Choose your weapon</p>
+    <div class="weapons" id="weapons" role="group" aria-label="Weapon"></div>
+    <p class="lead">Special target: ${v.sName} (×${v.sMult.toFixed(1)}, tighter timing). ${kickOpen(k)?`Bottom kick unlocked (×${SPOT_MULT.B.toFixed(1)}, tightest timing).`:`Bottom kick: 🔒 score ${KICK_UNLOCK.toLocaleString()} against the ${v.short} to unlock (${per.toLocaleString()}/${KICK_UNLOCK.toLocaleString()}).`}</p>
     <div class="btnrow"><button class="ovbtn" id="go" type="button">Start</button><button class="ovbtn ghost" id="back" type="button">Back</button></div>`;
-  $('go').addEventListener('click',()=>begin(k));
+  const grid=$('weapons');
+  Object.entries(WEAPONS).forEach(([id,wp])=>{
+    const open=weaponOpen(id),b=document.createElement('button');
+    b.type='button';b.className='weapon'+(open?'':' locked');b.disabled=!open;b.setAttribute('aria-pressed',String(id===w));
+    b.innerHTML=`<b>${wp.n}</b><small>${open?`×${wp.mult.toFixed(2)}`:`🔒 ${wp.unlock.toLocaleString()} pts`}</small>`;
+    if(open)b.addEventListener('click',()=>{setWeaponPref(id);showIntro(k,id)});
+    grid.appendChild(b);
+  });
+  $('go').addEventListener('click',()=>begin(k,w));
   $('back').addEventListener('click',showSelect);
   $('go').focus();
 }
@@ -197,16 +270,26 @@ function gameOver(reason){
   const v=V();
   const secsLeft=reason==='cleared'?Math.floor(S.finalLeft/1000):0;
   S.bonus=secsLeft*TIME_BONUS_PER_SEC;S.score+=S.bonus;hud();
+  screen='over';
   let best=getBest(S.vk);
   if(S.score>best){best=S.score;setBest(S.vk,best);$('best').textContent=best}
+  // Guests: progress lives in this browser. Logged-in players: the server counts the verified score and
+  // js/game-integration.js reports the unlocks once it has been saved.
+  let unlockHtml='';
+  if(!progressFromServer){
+    const prev=progress;progress=addProgress(progress,S.vk,S.score);saveLocalProgress(progress);
+    const labels=unlockLabels(prev,progress);
+    if(labels.length)unlockHtml=`<div class="unlocks">${labels.map(l=>`<p>🔓 ${l}</p>`).join('')}</div>`;
+  }
   ovTitle.textContent=reason==='cleared'?`All ${STAGES} stages cleared!`:reason==='timeout'?'Time’s up!':'Game over';
   ovBody.innerHTML=`<p class="big">${S.score}</p><p class="lead">${v.name} · best ${best} · stage ${Math.min(S.level,STAGES)}/${STAGES}</p>
   ${reason==='cleared'?`<p class="lead">Time bonus +${S.bonus} (${secsLeft}s left)</p>`:''}
+  ${unlockHtml}
   <div class="help"><p>A hit in a game is a protest. A phone call can stop a real crime.</p>
   ${v.help.map(([n,l])=>`<p><b>${n}</b> ${l}</p>`).join('')}</div>
   <div id="socialSlot" class="social-slot"></div>
   <div class="btnrow"><button class="ovbtn" id="again" type="button">Play again</button><button class="ovbtn ghost" id="pick" type="button">Change villain</button></div>`;
-  $('again').addEventListener('click',()=>begin(S.vk));
+  $('again').addEventListener('click',()=>begin(S.vk,S.weapon));
   $('pick').addEventListener('click',showSelect);
   ov.hidden=false;$('again').focus();
   emit('game:over',{villain:S.vk,score:S.score,rounds:S.log.slice(),best,end:reason,timeLeftMs:reason==='cleared'?S.finalLeft:0});
@@ -223,7 +306,10 @@ document.querySelectorAll('.spot').forEach(b=>b.addEventListener('click',()=>{if
 addEventListener('keydown',e=>{
   if(!S||!ov.hidden||document.querySelector('dialog[open]'))return;
   if(e.code==='Space'){e.preventDefault();if(!e.repeat)press()}
-  else if(['1','2','3'].includes(e.key)&&S.phase!=='charge'&&S.phase!=='timing'){S.spot='LRS'[+e.key-1];ui()}
+  else if(['1','2','3','4'].includes(e.key)&&S.phase!=='charge'&&S.phase!=='timing'){
+    const sp='LRSB'[+e.key-1];
+    if(sp!=='B'||kickOpen(S.vk)){S.spot=sp;ui()}
+  }
 });
 addEventListener('keyup',e=>{if(e.code==='Space'&&S&&!document.querySelector('dialog[open]'))release()});
 
@@ -243,8 +329,12 @@ function thump(f0,gain){
 }
 function sfxHit(w,force){
   if(w==='hand'){noise(.16,1700,.7,.5+.8*force,4);thump(160,.4*force)}
-  else if(w==='shoe'){noise(.14,1000,.9,.6+.8*force,3);thump(120,.55*force)}
-  else{noise(.32,3200,.5,.45+.6*force,1.6);noise(.12,900,.8,.4*force,4)}
+  else if(w==='sandal'){noise(.14,1000,.9,.6+.8*force,3);thump(120,.55*force)}
+  else if(w==='bamboo'){noise(.09,2600,1.2,.7+.8*force,5);thump(260,.35*force)}        // sharp crack
+  else if(w==='belan'){noise(.1,700,1,.5+.6*force,4);thump(95,.7*force)}               // dull knock
+  else if(w==='pan'){tone('triangle',0,.5,880,820,.3+.3*force);tone('square',0,.3,1320,1250,.1);noise(.05,3000,1,.4,5);thump(150,.3*force)} // clang
+  else if(w==='kick'){noise(.12,500,.8,.7+.8*force,3);thump(70,.9*force)}              // thud
+  else{noise(.32,3200,.5,.45+.6*force,1.6);noise(.12,900,.8,.4*force,4)}               // broom swish
 }
 function sfxWhoosh(){noise(.35,700,.6,.35,1.5)}
 
@@ -360,9 +450,22 @@ function mark(x,y,a,flip,weapon){
     ctx.fillStyle='#d8363c';ctx.beginPath();ctx.ellipse(0,4,10,9,0,0,7);ctx.fill();
     [[-8,-10,-.35],[-2,-13,-.1],[4,-12,.15],[10,-8,.4]].forEach(([fx,fy,r])=>{ctx.beginPath();ctx.ellipse(fx,fy,3,7,r,0,7);ctx.fill()});
     ctx.beginPath();ctx.ellipse(-12,6,3,6,-1.1,0,7);ctx.fill();
-  }else if(weapon==='shoe'){
+  }else if(weapon==='sandal'){
     ctx.rotate(.35);ctx.fillStyle='#6b3a2a';ctx.beginPath();ctx.ellipse(0,0,9,18,0,0,7);ctx.fill();
     ctx.strokeStyle='rgba(30,15,10,.8)';ctx.lineWidth=1.5;for(let i=-12;i<=12;i+=5){ctx.beginPath();ctx.moveTo(-7,i);ctx.lineTo(7,i);ctx.stroke()}
+  }else if(weapon==='bamboo'){
+    // two parallel welts
+    ctx.lineCap='round';[-7,7].forEach(dx=>{ctx.strokeStyle='rgba(120,20,26,.85)';ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(dx-10,-18);ctx.lineTo(dx+10,18);ctx.stroke();
+      ctx.strokeStyle='rgba(224,70,76,.9)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(dx-10,-18);ctx.lineTo(dx+10,18);ctx.stroke()});
+  }else if(weapon==='belan'){
+    ctx.rotate(.5);ctx.fillStyle='rgba(200,60,66,.85)';rr(-6,-20,12,40,6);ctx.fill();ctx.strokeStyle='rgba(110,20,26,.8)';ctx.lineWidth=1.5;ctx.stroke();
+  }else if(weapon==='pan'){
+    ctx.strokeStyle='rgba(215,60,66,.85)';ctx.lineWidth=6;ctx.beginPath();ctx.arc(0,0,13,0,7);ctx.stroke();
+    ctx.fillStyle='rgba(215,60,66,.3)';ctx.beginPath();ctx.arc(0,0,10,0,7);ctx.fill();
+  }else if(weapon==='kick'){
+    // dusty shoe print: sole, heel and tread
+    ctx.rotate(-.2);ctx.fillStyle='rgba(235,226,200,.85)';ctx.beginPath();ctx.ellipse(0,-8,15,22,0,0,7);ctx.fill();ctx.beginPath();ctx.ellipse(0,22,10,9,0,0,7);ctx.fill();
+    ctx.strokeStyle='rgba(60,50,40,.55)';ctx.lineWidth=2;for(let i=-22;i<=8;i+=7){ctx.beginPath();ctx.moveTo(-11,i);ctx.lineTo(11,i);ctx.stroke()}
   }else{
     ctx.strokeStyle='#c42b33';ctx.lineWidth=1.6;ctx.lineCap='round';
     for(let i=0;i<6;i++){ctx.beginPath();ctx.moveTo(-14+i*5,-14);ctx.lineTo(-6+i*5,14);ctx.stroke()}
@@ -383,13 +486,33 @@ function drawWeapon(weapon,x,y,flip,rot,alpha,vx){
     ctx.save();ctx.translate(-22,8);ctx.rotate(-.9);rr(-6,-22,12,30,6);ctx.fill();ctx.stroke();ctx.restore();
     rr(-24,-16,50,46,16);ctx.fill();ctx.stroke();
     ctx.strokeStyle='#c48c66';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-12,6);ctx.quadraticCurveTo(2,14,16,4);ctx.stroke();
-  }else if(weapon==='shoe'){
+  }else if(weapon==='sandal'){
     // hawai chappal held at the heel
     ctx.fillStyle='#1f4f9c';rr(-17,-82,34,90,16);ctx.fill();
     ctx.fillStyle='#f1efe8';rr(-14,-79,28,84,14);ctx.fill();
     line([[-12,-40],[0,-62],[12,-40]],'#1f4f9c',6);ell(0,-62,4,4,'#1f4f9c');
     ctx.fillStyle='#e7b28a';ctx.strokeStyle='#8a5a3c';ctx.beginPath();ctx.arc(0,10,16,0,7);ctx.fill();ctx.stroke();
     line([[-10,4],[10,4]],'#c48c66',1.5);
+  }else if(weapon==='bamboo'){
+    // long bamboo stick with nodes
+    ctx.fillStyle='#b8a04a';ctx.strokeStyle='#6b5a1e';ctx.lineWidth=2.5;rr(-6,-170,12,190,5);ctx.fill();ctx.stroke();
+    ctx.lineWidth=3;[-125,-75,-25].forEach(y=>{ctx.beginPath();ctx.moveTo(-7,y);ctx.lineTo(7,y);ctx.stroke()});
+    ctx.fillStyle='#dccb73';ctx.fillRect(-3,-166,3,180);
+    ctx.fillStyle='#e7b28a';ctx.strokeStyle='#8a5a3c';ctx.beginPath();ctx.arc(0,6,15,0,7);ctx.fill();ctx.stroke();
+  }else if(weapon==='belan'){
+    // rolling pin: barrel with two handles
+    ctx.fillStyle='#c98a4b';ctx.strokeStyle='#7a4a22';ctx.lineWidth=2.5;
+    rr(-5,-124,10,36,4);ctx.fill();ctx.stroke();rr(-16,-92,32,76,13);ctx.fill();ctx.stroke();
+    ctx.strokeStyle='#a56a30';ctx.lineWidth=1.5;[-76,-56,-36].forEach(y=>{ctx.beginPath();ctx.moveTo(-14,y);ctx.lineTo(14,y);ctx.stroke()});
+    ctx.fillStyle='#c98a4b';ctx.strokeStyle='#7a4a22';ctx.lineWidth=2.5;rr(-5,-20,10,30,4);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#e7b28a';ctx.strokeStyle='#8a5a3c';ctx.beginPath();ctx.arc(0,8,15,0,7);ctx.fill();ctx.stroke();
+  }else if(weapon==='pan'){
+    // frying pan: dark handle, round pan
+    ctx.fillStyle='#3a3f46';ctx.strokeStyle='#22252a';ctx.lineWidth=2.5;rr(-6,-34,12,52,5);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#6c727c';ctx.strokeStyle='#3d4148';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,-74,42,0,7);ctx.fill();ctx.stroke();
+    ctx.strokeStyle='#8b919b';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,-74,31,0,7);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.18)';ctx.beginPath();ctx.ellipse(-12,-88,12,7,-.6,0,7);ctx.fill();
+    ctx.fillStyle='#e7b28a';ctx.strokeStyle='#8a5a3c';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(0,8,15,0,7);ctx.fill();ctx.stroke();
   }else{
     // shola jharu: bundle of thin sticks, tied near the grip
     for(let i=0;i<22;i++){const sx=-26+i*2.5;ctx.strokeStyle=i%3?'#c9a45a':'#a8853f';ctx.lineWidth=1.6;
@@ -426,6 +549,78 @@ function placard(en,bn){
   ctx.restore();
 }
 
+// ---------- rear view (the villain turns his back when the bottom is the target) ----------
+const REAR={
+  abuser:{skin:'#c98d63',skinDk:'#a8714d',hair:'#2e2724'},
+  robber:{skin:'#a8714d',skinDk:'#7a4e33',hair:'#1f1612'},
+  rapist:{skin:'#c48a64',skinDk:'#a46f4c',hair:'#141218'}
+};
+function drawCapBack(x,y){
+  ctx.save();ctx.translate(x,y);
+  ctx.beginPath();ctx.moveTo(-42,28);ctx.quadraticCurveTo(-44,-24,0,-27);ctx.quadraticCurveTo(44,-24,42,28);ctx.quadraticCurveTo(0,22,-42,28);ctx.closePath();
+  ctx.fillStyle='#c0302b';ctx.fill();ctx.strokeStyle='#7a1a17';ctx.lineWidth=2;ctx.stroke();
+  line([[0,-27],[0,24]],'#7a1a17',1.5);line([[-26,-20],[-18,25]],'#7a1a17',1.5);line([[26,-20],[18,25]],'#7a1a17',1.5);
+  ell(0,-26,4,3,'#7a1a17');
+  ctx.fillStyle='#7a1a17';rr(-18,19,36,7,2);ctx.fill();ctx.fillStyle='#d9a441';rr(-5,19,10,7,2);ctx.fill();   // adjustable strap
+  ctx.restore();
+}
+function drawRear(st,vk,hx,hy,rot){
+  const c=REAR[vk],pd=vk==='robber'?'#26335a':'#0e0d12';
+  // body seen from behind
+  ctx.save();ctx.translate(180+hx,240+hy);ctx.rotate(rot*.5);ctx.translate(-180,-240);
+  ctx.fillStyle=c.skinDk;ctx.fillRect(166,222,28,44);
+  if(vk==='abuser'){
+    // long panjabi: back seam, side slits, folds over the seat
+    ctx.beginPath();ctx.moveTo(118,264);ctx.quadraticCurveTo(180,248,242,264);ctx.lineTo(272,304);ctx.lineTo(282,PANEL);ctx.lineTo(78,PANEL);ctx.lineTo(88,304);ctx.closePath();
+    ctx.fillStyle='#ecebe3';ctx.fill();ctx.strokeStyle='#c9c6ba';ctx.lineWidth=2;ctx.stroke();
+    line([[180,262],[180,PANEL]],'#c9c6ba',2);line([[110,330],[104,PANEL]],'#c9c6ba',2);line([[250,330],[256,PANEL]],'#c9c6ba',2);
+    ctx.strokeStyle='rgba(120,112,96,.4)';ctx.lineWidth=2.5;
+    [158,202].forEach(cx=>{ctx.beginPath();ctx.arc(cx,368,32,.15*Math.PI,.85*Math.PI);ctx.stroke()});
+  }else{
+    const robber=vk==='robber',shirt=robber?'#2b3a67':'#1c1a22',pants=robber?'#34456f':'#17151c';
+    ctx.beginPath();ctx.moveTo(robber?122:112,266);ctx.quadraticCurveTo(180,252,robber?238:248,266);
+    ctx.lineTo(robber?262:276,304);ctx.lineTo(robber?256:266,332);ctx.lineTo(robber?104:94,332);ctx.lineTo(robber?98:84,304);ctx.closePath();
+    ctx.fillStyle=shirt;ctx.fill();
+    if(robber){ctx.fillStyle='rgba(242,200,90,.28)';ctx.font=font(DISP,16);ctx.textAlign='center';ctx.fillText('BOSS',180,300)}
+    else line([[180,264],[180,334]],'#2a2730',2);   // jacket vent
+    ctx.beginPath();ctx.moveTo(110,326);ctx.lineTo(250,326);ctx.lineTo(268,PANEL);ctx.lineTo(92,PANEL);ctx.closePath();ctx.fillStyle=pants;ctx.fill();
+    ctx.fillStyle=pd;ctx.fillRect(110,326,140,8);
+    line([[180,334],[180,PANEL]],pd,3);
+    ctx.strokeStyle=pd;ctx.lineWidth=2.5;[152,208].forEach(cx=>{ctx.beginPath();ctx.arc(cx,368,34,.1*Math.PI,.9*Math.PI);ctx.stroke()});
+    if(robber){ctx.strokeStyle='#8fa0c8';ctx.lineWidth=1.5;rr(126,344,34,30,5);ctx.stroke();rr(200,344,34,30,5);ctx.stroke()}   // jeans back pockets
+  }
+  mark(180,372,st.red.B||0,false,'kick');
+  ctx.restore();
+  // head seen from behind
+  ctx.save();ctx.translate(180+hx,240+hy);ctx.rotate(rot);ctx.translate(-180,-240);
+  const wide=vk==='rapist';
+  ell(wide?128:133,wide?184:186,9,14,c.skin);ell(wide?232:227,wide?184:186,9,14,c.skin);ell(180,wide?182:180,wide?52:vk==='robber'?43:47,wide?56:vk==='robber'?55:57,c.skin);
+  if(vk==='abuser'){
+    ell(180,170,45,47,c.hair);
+    [[160,134,156,160],[172,130,170,166],[188,130,190,166],[200,134,204,160],[150,170,148,196],[210,170,212,196]].forEach(([a1,b1,a2,b2])=>line([[a1,b1],[a2,b2]],'#4a403b',1.5));
+    ell(137,206,4,12,c.hair);ell(223,206,4,12,c.hair);
+    drawTupi(180,118,0);
+  }else if(vk==='robber'){
+    ell(180,178,41,46,c.hair);drawCapBack(180,118);
+  }else{
+    ell(180,170,50,52,c.hair);
+    line([[150,134],[168,146]],'rgba(255,255,255,.3)',2.5);line([[192,132],[214,142]],'rgba(255,255,255,.2)',2);
+  }
+  line([[166,229],[194,229]],c.skinDk,2);line([[170,235],[190,235]],c.skinDk,1.5);   // neck creases
+  ctx.restore();
+}
+// a leg and sneaker coming in from the viewer's side
+function drawKick(x,y,sc,alpha,vx){
+  ctx.save();ctx.globalAlpha=alpha;motionLines(x,y,vx);
+  ctx.translate(x,y);ctx.rotate(-.3);ctx.scale(sc,sc);
+  ctx.fillStyle='#2d3d63';ctx.strokeStyle='#1c2744';ctx.lineWidth=2.5;rr(8,-17,130,38,16);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#f4efe4';ctx.strokeStyle='#8c867a';rr(-40,-21,62,42,16);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#d6403a';rr(-40,-21,34,31,14);ctx.fill();
+  ctx.fillStyle='#1b1512';ctx.fillRect(-32,13,54,6);
+  ctx.strokeStyle='#8c867a';ctx.lineWidth=1.5;[-2,6,14].forEach(dx=>{ctx.beginPath();ctx.moveTo(dx,-14);ctx.lineTo(dx+8,-6);ctx.stroke()});
+  ctx.restore();
+}
+
 function drawCharacter(st,vk,clk){
   const a=st.anim;let hx=0,hy=Math.sin(clk*2)*1.5,rot=0,armY=0,eyes='shifty',mouth='smirk';
   if(st.phase==='charge'||st.phase==='timing')eyes='nervous';
@@ -434,6 +629,7 @@ function drawCharacter(st,vk,clk){
     if(a.hit){
       if(k>0){const amp=(10+32*a.force)*(isPerfect(a)?1.3:1),disp=amp*sstep(k/.03)*Math.exp(-k*5)*Math.cos(k*16);
         if(a.spot==='L'){hx+=disp;rot=disp*.007}else if(a.spot==='R'){hx-=disp;rot=-disp*.007}
+        else if(a.spot==='B'){hy-=Math.abs(disp)*.9;hx+=disp*.15;rot=disp*.002}   // lurches forward from the kick
         else if(vk==='robber'){armY=Math.abs(disp)*1.2;hx+=disp*.2}
         else{hy+=Math.abs(disp)*.7;rot=disp*.003}
         if(k<(isPerfect(a)?.9:.7)){eyes='dazed';mouth='ouch'}}
@@ -443,8 +639,13 @@ function drawCharacter(st,vk,clk){
       eyes='laugh';mouth='laugh';
     }
   }
-  const v=VILLAINS[vk];
+  const v=VILLAINS[vk],wk=st.weapon||'hand';
 
+  // When the bottom is the target the whole villain turns his back: squash horizontally, then show the rear view.
+  const eB=sstep(st.turnB||0);
+  ctx.save();
+  if(eB>0){ctx.translate(180,0);ctx.scale(Math.max(.04,Math.abs(Math.cos(eB*Math.PI))),1);ctx.translate(-180,0)}
+  if(eB>.5){drawRear(st,vk,hx,hy,rot)}else{
   if(vk==='abuser'){
     line([[300,PANEL],[284,262]],'#6b4423',7);ctx.beginPath();ctx.arc(296,262,12,Math.PI,Math.PI*1.9);ctx.stroke();
     ctx.fillStyle='#b97c55';ctx.fillRect(166,222,28,44);
@@ -495,7 +696,7 @@ function drawCharacter(st,vk,clk){
       ell(137,206,4,12,'#2e2724');ell(223,206,4,12,'#2e2724');
       line([[130,184],[134,192]],'#a8714d',2);line([[230,184],[226,192]],'#a8714d',2);
       line([[166,228],[194,228]],'#a8714d',2);line([[170,234],[190,234]],'#a8714d',1.5);
-      mark(180,176,st.red.S||0,false,v.weapon);
+      mark(180,176,st.red.S||0,false,wk);
     }else{
       ctx.beginPath();ctx.moveTo(134,184);ctx.quadraticCurveTo(136,234,158,262);ctx.lineTo(168,292);ctx.lineTo(177,274);ctx.lineTo(185,298);ctx.lineTo(194,274);ctx.lineTo(204,286);
       ctx.quadraticCurveTo(224,240,226,184);ctx.quadraticCurveTo(220,214,198,218);ctx.quadraticCurveTo(180,213,162,218);ctx.quadraticCurveTo(140,214,134,184);ctx.closePath();
@@ -504,7 +705,7 @@ function drawCharacter(st,vk,clk){
       line([[181,180],[173,204],[186,205]],'#9a6544',2.5);
       eyesAndMouth(eyes,mouth,229,170,'#7e5034');
       line([[151,157],[173,162]],'#2e2724',4);line([[187,160],[209,152]],'#2e2724',4);
-      mark(150,196,st.red.L,false,v.weapon);mark(210,196,st.red.R,true,v.weapon);
+      mark(150,196,st.red.L,false,wk);mark(210,196,st.red.R,true,wk);
     }
     if(!st.drop)drawTupi(180,118,0);
   }else if(vk==='robber'){
@@ -516,7 +717,7 @@ function drawCharacter(st,vk,clk){
     eyesAndMouth(eyes,mouth,226,170,'#6e4a32');
     line([[152,159],[173,163]],'#1f1612',4);line([[187,163],[208,159]],'#1f1612',4);
     line([[148,150],[156,168]],'#e2b8a0',2);line([[147,156],[155,155]],'#e2b8a0',1.2);line([[150,162],[157,161]],'#e2b8a0',1.2);
-    mark(152,196,st.red.L,false,v.weapon);mark(208,196,st.red.R,true,v.weapon);
+    mark(152,196,st.red.L,false,wk);mark(208,196,st.red.R,true,wk);
     ctx.fillStyle='#1f1612';ctx.beginPath();ctx.moveTo(138,150);ctx.lineTo(132,136);ctx.lineTo(146,142);ctx.lineTo(214,142);ctx.lineTo(228,136);ctx.lineTo(222,150);ctx.closePath();ctx.fill();
     if(!st.drop||st.drop.kind!=='cap')drawBallCap(180,118,0);
   }else{
@@ -529,12 +730,14 @@ function drawCharacter(st,vk,clk){
     eyesAndMouth(st.drop?eyes:'hidden',mouth,228,172,'#93603f');
     ctx.fillStyle='#141218';ctx.beginPath();ctx.moveTo(156,214);ctx.quadraticCurveTo(180,202,204,214);ctx.quadraticCurveTo(206,222,196,220);ctx.quadraticCurveTo(180,212,164,220);ctx.quadraticCurveTo(154,222,156,214);ctx.fill();
     line([[150,155],[172,152]],'#141218',5);line([[188,152],[210,155]],'#141218',5);
-    mark(146,200,st.red.L,false,v.weapon);mark(214,200,st.red.R,true,v.weapon);
+    mark(146,200,st.red.L,false,wk);mark(214,200,st.red.R,true,wk);
     if(!st.drop)drawGlasses(180,172,0,eyes==='dazed');
   }
   if((st.phase==='timing'||st.phase==='charge')){
     const sy=146+((clk*30)%20);ctx.fillStyle='rgba(170,215,240,.85)';
     ctx.beginPath();ctx.moveTo(230,sy-8);ctx.quadraticCurveTo(238,sy+4,230,sy+6);ctx.quadraticCurveTo(222,sy+4,230,sy-8);ctx.fill();
+  }
+  ctx.restore();
   }
   ctx.restore();
 
@@ -551,15 +754,18 @@ function drawSlapHand(){
   const t=a.t;let p0,p1,p2,flip=false,rot=.25;
   if(a.spot==='L'){p0=[-90,200];p1=[146,200];p2=[290,214]}
   else if(a.spot==='R'){p0=[450,200];p1=[214,200];p2=[70,214];flip=true;rot=-.25}
+  else if(a.spot==='B'){p0=[330,540];p1=[188,384];p2=[166,344]}
   else if(v.sPath==='hand'){p0=[60,-60];p1=[274,288];p2=[340,360];rot=1.3}
   else if(v.sPath==='back'){p0=[40,-70];p1=[180,152];p2=[246,216];rot=1.1}
   else{p0=[30,-80];p1=[178,104];p2=[250,170];rot=1.1}
-  if(!a.hit){const off=a.spot==='S'?[-40,10]:[0,-40];p1=[p1[0]+off[0],p1[1]+off[1]];p2=[p2[0]+off[0],p2[1]+off[1]]}
-  let x,y,alpha=1;
+  if(!a.hit){const off=a.spot==='S'?[-40,10]:a.spot==='B'?[-80,30]:[0,-40];p1=[p1[0]+off[0],p1[1]+off[1]];p2=[p2[0]+off[0],p2[1]+off[1]]}
+  let x,y,alpha=1,sc=1;
   // accelerate into the target, then decelerate through the follow-through
-  if(t<.12){const k=t/.12,e=k*k;x=lerp(p0[0],p1[0],e);y=lerp(p0[1],p1[1],e)}
-  else{const k=Math.min(1,(t-.12)/.22),e=1-Math.pow(1-k,3);x=lerp(p1[0],p2[0],e);y=lerp(p1[1],p2[1],e);alpha=Math.max(0,1-(t-.2)/.2)}
-  if(alpha>0)drawWeapon(v.weapon,x,y,flip,rot,alpha,p2[0]-p0[0]);
+  if(t<.12){const k=t/.12,e=k*k;x=lerp(p0[0],p1[0],e);y=lerp(p0[1],p1[1],e);sc=lerp(1.5,1,e)}
+  else{const k=Math.min(1,(t-.12)/.22),e=1-Math.pow(1-k,3);x=lerp(p1[0],p2[0],e);y=lerp(p1[1],p2[1],e);alpha=Math.max(0,1-(t-.2)/.2);sc=lerp(1,.85,e)}
+  if(alpha<=0)return;
+  if(a.spot==='B')drawKick(x,y,sc,alpha,p2[0]-p0[0]);
+  else drawWeapon(S.weapon,x,y,flip,rot,alpha,p2[0]-p0[0]);
 }
 
 // impact shockwave rings; a perfect hit adds a rotating sunburst and a white flash
@@ -640,11 +846,11 @@ function drawFx(){
   const a=S.anim;
   if(a&&a.impacted){
     const v=V(),k=a.t-.12,alpha=a.t<.85?1:Math.max(0,1-(a.t-.85)/.15),pop=1+.45*Math.max(0,1-k/.1);
-    const top=a.spot==='S'&&v.sPath!=='hand',px=top?180:a.spot==='R'?96:a.spot==='L'?262:96,py=top?300:a.spot==='S'?130:118;
+    const top=(a.spot==='S'&&v.sPath!=='hand')||a.spot==='B',px=top?180:a.spot==='R'?96:a.spot==='L'?262:96,py=top?300:a.spot==='S'?130:118;
     ctx.save();ctx.globalAlpha=alpha;ctx.translate(a.hit?px:180,a.hit?py:118);ctx.rotate(-.12);ctx.scale(pop,pop);ctx.textAlign='center';
     if(a.hit){
-      const word=a.spot==='S'?v.sWord:v.word,size=Math.round((v.bnWord?24:30)+(v.bnWord?18:26)*a.force);
-      ctx.font=v.bnWord?font(BN,size):font(DISP,size);ctx.lineWidth=6;ctx.strokeStyle='#b52a24';ctx.lineJoin='round';
+      const w=a.spot==='B'?KICK:WEAPONS[S.weapon],word=a.spot==='S'?w.sWord:w.word,size=Math.round((w.bn?24:30)+(w.bn?18:26)*a.force);
+      ctx.font=w.bn?font(BN,size):font(DISP,size);ctx.lineWidth=6;ctx.strokeStyle='#b52a24';ctx.lineJoin='round';
       ctx.strokeText(word,0,0);ctx.fillStyle='#f2b134';ctx.fillText(word,0,0);
       ctx.font=font(DISP,17);ctx.fillStyle=a.g.c;ctx.fillText(`${a.g.n}  +${a.pts}`,0,26);
       if(a.combo>1){ctx.font=font(BODY,13);ctx.fillStyle='#f4efe4';ctx.fillText(`combo ×${a.combo}`,0,44)}
@@ -668,8 +874,8 @@ function drawPanel(){
 
   const tx=64,si=spotInfo(S.spot);ctx.textAlign='left';
   ctx.fillStyle='#f4efe4';ctx.font=font(DISP,20);ctx.fillText(`STAGE ${Math.min(S.level+1,STAGES)}/${STAGES}`,tx,446);
-  ctx.font=font(BODY,12);ctx.fillStyle='#a9bfb6';
-  ctx.fillText(`${v.weaponName} → ${si.name} ×${si.mult.toFixed(1)}`,tx,466);
+  ctx.font=font(BODY,11);ctx.fillStyle='#a9bfb6';
+  ctx.fillText(`${S.spot==='B'?'Kick':WEAPONS[S.weapon].n} → ${si.name} ×${+(si.mult*weaponMult(S.spot)).toFixed(2)}`,tx,466);
   const tl=Math.max(0,S.timeLeft),secs=Math.ceil(tl/1000);
   ctx.fillStyle=tl<=10000?(Math.floor(clock*4)%2?'#ff6b63':'#d6403a'):tl<=20000?'#f2b134':'#a9bfb6';
   ctx.fillText(`Time left ${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')}`,tx,482);
@@ -711,7 +917,8 @@ function update(dt,wall=dt){
     if(S.timeLeft<=0){S.timeLeft=0;if(S.phase!=='anim'){gameOver('timeout');return}}
   }
   S.turn+=Math.max(-dt*4,Math.min(dt*4,(S.vk==='abuser'&&S.spot==='S'?1:0)-S.turn));
-  if(S.phase==='charge'){S.chargeT+=dt;S.power=(1-Math.cos(S.chargeT*(3+S.level*.65)))/2}
+  S.turnB+=Math.max(-dt*3.5,Math.min(dt*3.5,(S.spot==='B'?1:0)-S.turnB));
+  if(S.phase==='charge'){S.chargeT+=dt;S.power=(1-Math.cos(S.chargeT*(3+S.level*.45)))/2}
   else if(S.phase==='timing'){
     S.t+=dt;const sp=S.speed*(S.wobble?1+.5*Math.sin(S.t*4.3):1),d=S.dir*sp*dt;
     S.needle=(S.needle+d+360)%360;S.travel+=Math.abs(d);
@@ -754,7 +961,21 @@ function draw(){
 function loop(now){const wall=(now-lastT)/1000,dt=Math.min(.05,wall);lastT=now;update(dt,wall);draw();requestAnimationFrame(loop)}
 
 // read by js/game-integration.js so a dialog is never opened in the middle of a swing
-window.PunisherGame={isBusy:()=>!!S&&(S.phase==='charge'||S.phase==='timing'||S.phase==='anim')};
-newGame('abuser');showSelect();
+function refreshProgressUi(){
+  if(screen==='select')showSelect();else if(S)ui();
+}
+window.PunisherGame={
+  isBusy:()=>!!S&&(S.phase==='charge'||S.phase==='timing'||S.phase==='anim'),
+  // Logged-in players: the server's verified totals replace the local ones. Returns labels of anything newly unlocked.
+  applyServerProgress(p){
+    const prev=progress;
+    progress={total:p.totalScore,per:{...blankProgress().per,...p.villainScores}};progressFromServer=true;
+    refreshProgressUi();
+    return unlockLabels(prev,progress);
+  },
+  useLocalProgress(){progress=loadLocalProgress();progressFromServer=false;refreshProgressUi()},
+  getProgress:()=>progress
+};
+newGame('robber');showSelect();
 if(document.fonts)document.fonts.ready.then(()=>{fit();if(!ov.hidden&&$('cards'))showSelect()});
 requestAnimationFrame(loop);

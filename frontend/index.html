@@ -17,7 +17,7 @@
 
 <div class="top">
   <div class="title">
-    <h1 id="h1">Slap the <em>Abuser</em></h1>
+    <h1 id="h1">Slap the <em>Snatcher</em></h1>
     <span class="bn" id="tag">অপরাধীর বিচার চাই</span>
   </div>
   <div class="stats">
@@ -49,6 +49,7 @@
     <button class="spot" type="button" data-spot="L">Left cheek<small>×1.0 · key 1</small></button>
     <button class="spot" type="button" data-spot="R">Right cheek<small>×1.0 · key 2</small></button>
     <button class="spot" type="button" data-spot="S" id="spotS">Back of head<small>×1.6 · key 3</small></button>
+    <button class="spot locked" type="button" data-spot="B" id="spotB" disabled>🔒 Bottom<small>1,500 pts</small></button>
   </div>
   <button class="act" id="act" type="button">HOLD TO CHARGE</button>
 </div>
@@ -120,7 +121,7 @@
       </form>
     </div>
     <div id="acctAuthed" hidden>
-      <div class="who"><img id="acctAvatar" alt="" width="48" height="48" hidden><div><b id="acctName"></b><small id="acctSub"></small></div></div>
+      <div class="who"><span id="acctAvatar" class="av big"></span><div><b id="acctName"></b><small id="acctSub"></small></div></div>
       <dl id="acctStats" class="stats-grid"></dl>
       <form id="nickForm" class="row">
         <label class="sr-only" for="nickInput">Nickname</label>

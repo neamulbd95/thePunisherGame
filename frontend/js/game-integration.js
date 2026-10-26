@@ -1,11 +1,11 @@
 // Connects the (unchanged, offline-capable) game to the backend. The game dispatches
-//   game:start  {villain}                         -> request a server-side game session
+//   game:start  {villain, weapon}                 -> request a server-side game session
 //   game:over   {villain, score, rounds, best}    -> submit the round log for server verification
 // and never waits for the network, so a slow or missing API cannot affect gameplay.
 import { api, userMessage } from './api.js';
 import * as session from './session.js';
 import { facebookAvailable, facebookLogin } from './facebook-auth.js';
-import { initBoard, loadBoard, initFriends, loadFriends } from './leaderboard.js';
+import { initBoard, loadBoard, initFriends, loadFriends, avatarNode } from './leaderboard.js';
 
 const cfg = window.PUNISHER_CONFIG;
 const $ = (id) => document.getElementById(id);
@@ -73,9 +73,7 @@ async function renderAccount() {
   const p = auth.player;
   $('acctName').textContent = p.displayName;
   $('acctSub').textContent = 'Friend code: ' + p.friendCode;
-  const img = $('acctAvatar');
-  img.hidden = !(p.avatarUrl && /^https:\/\//.test(p.avatarUrl));
-  if (!img.hidden) img.src = p.avatarUrl;
+  $('acctAvatar').replaceChildren(avatarNode(p.avatarUrl));
   $('nickInput').value = p.displayName;
   $('fbFriendsBtn').hidden = !(facebookAvailable() && !p.facebookFriendsEnabled);
   try {
@@ -152,8 +150,8 @@ let current = null; // { villain, promise }
 document.addEventListener('game:start', (e) => {
   current = null;
   if (auth.status !== 'authed') return;
-  const villain = e.detail.villain;
-  current = { villain, promise: api('/game-sessions', { method: 'POST', body: { villain } }).catch((error) => ({ error })) };
+  const { villain, weapon } = e.detail;
+  current = { villain, promise: api('/game-sessions', { method: 'POST', body: { villain, weapon } }).catch((error) => ({ error })) };
 });
 
 document.addEventListener('game:over', (e) => renderGameOver(e.detail, current));
@@ -185,7 +183,9 @@ function renderGameOver(result, game) {
     status.textContent = 'Saving your score…';
     const s = await game.promise;
     if (s.error) {
-      status.textContent = 'Could not reach the server, so this score was not saved. ' + userMessage(s.error);
+      status.textContent = s.error.code === 'LOCKED'
+        ? 'That villain or weapon is not unlocked on your account yet (progress counts verified, saved scores), so this score was not saved.'
+        : 'Could not reach the server, so this score was not saved. ' + userMessage(s.error);
       return;
     }
     try {
@@ -196,6 +196,13 @@ function renderGameOver(result, game) {
       });
       status.textContent = `Saved! You are #${r.allTimeRank} on the all-time board${r.personalBest ? ' — a new personal best!' : '.'}`;
       announce(status.textContent);
+      // the saved score may have unlocked something new
+      const labels = await syncProgress();
+      if (labels.length) {
+        const box = el('div', { class: 'unlocks' });
+        labels.forEach((l) => box.append(el('p', { text: `🔓 ${l}` })));
+        status.after(box);
+      }
     } catch (err) {
       if (err.code === 'NETWORK' || err.code === 'TIMEOUT') {
         status.textContent = userMessage(err);
@@ -214,9 +221,27 @@ function renderGameOver(result, game) {
   submit();
 }
 
+// ---------------- progress (unlocks) ----------------
+// Logged-in players unlock things through verified server-side scores; guests through scores kept in this browser.
+let progressFor = null; // id of the player whose server progress is applied
+async function syncProgress() {
+  try {
+    return window.PunisherGame.applyServerProgress(await api('/players/me/progress'));
+  } catch {
+    return []; // offline: keep whatever is shown, the next login or game refreshes it
+  }
+}
+
 // ---------------- boot ----------------
 session.onChange(() => {
   renderChip();
+  if (auth.status === 'authed' && progressFor !== auth.player.id) {
+    progressFor = auth.player.id;
+    syncProgress();
+  } else if (auth.status === 'guest' && progressFor) {
+    progressFor = null;
+    window.PunisherGame.useLocalProgress();
+  }
   if (dlg.open) {
     renderAccount();
     const active = TABS.find((t) => $(`tab-${t}`).getAttribute('aria-selected') === 'true');
