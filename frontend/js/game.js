@@ -37,7 +37,7 @@ const VILLAINS={
 };
 const GRADES=[{n:'PERFECT',f:.3,m:1.5,c:'#f2b134'},{n:'GREAT',f:.65,m:1.2,c:'#f4efe4'},{n:'GOOD',f:1,m:1,c:'#9fd3c0'}];
 // A session is STAGES successful hits against a clock. Keep the constants in this block in sync with backend/src/utils/game-rules.js.
-const STAGES=15,TIME_LIMIT_MS=60000,TIME_BONUS_PER_SEC=20;
+const STAGES=12,TIME_LIMIT_MS=60000,TIME_BONUS_PER_SEC=20;
 // Weapons are chosen before a game. Each unlocks at a TOTAL score and adds a small score multiplier.
 const WEAPONS={
   hand:{n:'Bare hand',verb:'Slap',title:'Slap',mult:1,unlock:0,word:'SLAP!',sWord:'THWACK!',bn:false},
@@ -98,9 +98,9 @@ const spotMult=sp=>sp==='S'?V().sMult:SPOT_MULT[sp]||1;
 const spotTight=sp=>sp==='S'?V().sTight:sp==='B'?.7:1;
 const spotInfo=sp=>sp==='S'?{name:V().sName,mult:V().sMult}:sp==='B'?{name:'Bottom (kick)',mult:SPOT_MULT.B}:{name:sp==='L'?'Left cheek':'Right cheek',mult:1};
 const weaponMult=(sp)=>sp==='B'?1:WEAPONS[S.weapon].mult;
-const zoneHalf=()=>Math.max(10,38-S.level*2.2)*spotTight(S.spot);
+const zoneHalf=()=>Math.max(10,38-S.level*2.8)*spotTight(S.spot);
 // the PERFECT window shrinks every stage (11.4° -> 3°) while the needle gets faster, so late stages are brutal
-const perfectHalf=()=>Math.max(3,11.4-S.level*.7)*spotTight(S.spot);
+const perfectHalf=()=>Math.max(3,11.4-S.level*.9)*spotTight(S.spot);
 const angDiff=(a,b)=>{let d=Math.abs(a-b)%360;return d>180?360-d:d};
 const sstep=x=>{x=Math.max(0,Math.min(1,x));return x*x*(3-2*x)};
 const easeOutBack=x=>1+2.70158*Math.pow(x-1,3)+1.70158*Math.pow(x-1,2);
@@ -144,7 +144,7 @@ function release(){
   if(S.phase!=='charge')return;
   S.locked=S.power;S.phase='timing';
   S.needle=Math.random()*360;S.zone=(S.needle+110+Math.random()*140)%360;
-  S.speed=Math.min(560,V().base*(1+S.level*.17));S.dir=S.level>=4&&Math.random()<.5?-1:1;S.wobble=S.level>=8;S.travel=0;S.t=0;
+  S.speed=Math.min(560,V().base*(1+S.level*.216));S.dir=S.level>=4&&Math.random()<.5?-1:1;S.wobble=S.level>=8;S.travel=0;S.t=0;
   ui();
 }
 function resolve(d){
@@ -212,7 +212,9 @@ function endAnim(){
 // ---------- overlay ----------
 const ov=$('overlay'),ovTitle=$('ovTitle'),ovBody=$('ovBody');
 const controlsEl=document.querySelector('.controls');
-const syncControls=()=>controlsEl.classList.toggle('is-off',!ov.hidden);
+// While a menu screen (landing, intro, game over) is showing, it takes the whole area below the header and the
+// hit-spot / charge controls give their space back. While playing, the canvas is fitted to the free area.
+const syncControls=()=>{controlsEl.classList.toggle('is-off',!ov.hidden);document.body.classList.toggle('menu',!ov.hidden);fit()};
 new MutationObserver(syncControls).observe(ov,{attributes:true,attributeFilter:['hidden']});
 syncControls();
 function showSelect(){
@@ -909,7 +911,7 @@ function update(dt,wall=dt){
   }
   S.turn+=Math.max(-dt*4,Math.min(dt*4,(S.vk==='abuser'&&S.spot==='S'?1:0)-S.turn));
   S.turnB+=Math.max(-dt*3.5,Math.min(dt*3.5,(S.spot==='B'?1:0)-S.turnB));
-  if(S.phase==='charge'){S.chargeT+=dt;S.power=(1-Math.cos(S.chargeT*(3+S.level*.45)))/2}
+  if(S.phase==='charge'){S.chargeT+=dt;S.power=(1-Math.cos(S.chargeT*(3+S.level*.57)))/2}
   else if(S.phase==='timing'){
     S.t+=dt;const sp=S.speed*(S.wobble?1+.5*Math.sin(S.t*4.3):1),d=S.dir*sp*dt;
     S.needle=(S.needle+d+360)%360;S.travel+=Math.abs(d);

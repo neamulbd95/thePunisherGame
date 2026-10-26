@@ -11,6 +11,8 @@ const $ = (id) => document.getElementById(id);
 const dlg = $('social');
 const auth = session.state;
 
+$('year').textContent = new Date().getFullYear();
+
 const announce = (t) => { $('live').textContent = t; };
 function el(tag, props = {}, ...kids) {
   const n = document.createElement(tag);

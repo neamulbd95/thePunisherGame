@@ -88,3 +88,4 @@ dialog button:focus-visible,dialog select:focus-visible,dialog input:focus-visib
 .recovery .btnrow{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
 .ovbtn.fb{background:#1877f2;text-decoration:none;display:inline-block}
 a.ovbtn.small{padding:8px 16px}
+.site-foot{padding:4px 8px;line-height:1.35}

@@ -87,3 +87,31 @@ button:focus-visible{outline:3px solid var(--chalk);outline-offset:2px}
 .overlay .lead{font-size:.8rem;line-height:1.35}
 .card canvas{max-width:96px}
 .helplines{gap:1px}
+
+/* ---- menu screens use the full page, without an inner scroll bar ---- */
+.controls.is-off{display:none}
+body.menu .stage{max-width:none;align-items:stretch}
+body.menu .frame{width:100%!important;height:auto!important;flex:1}
+body.menu #c{visibility:hidden}
+.overlay{border-radius:0;scrollbar-width:none;-ms-overflow-style:none}
+.overlay::-webkit-scrollbar{display:none}
+body.menu .overlay{padding:12px clamp(12px,4vw,40px)}
+#ovBody{max-width:560px}
+.cards{max-width:520px}
+.card canvas{max-width:120px}
+@media (max-height:760px){.card canvas{max-width:90px}.overlay{gap:5px}}
+/* on big screens the menu screens scale up so they use the page instead of floating in it */
+@media (min-width:700px) and (min-height:820px){
+  .overlay{gap:12px}
+  .overlay h2{font-size:2.6rem}
+  .overlay .lead{font-size:1rem;line-height:1.45}
+  .overlay .big{font-size:4.4rem}
+  #ovBody{max-width:720px;gap:14px!important}
+  .cards{max-width:720px;gap:14px}
+  .card{padding:10px 8px 12px}
+  .card canvas{max-width:170px}
+  .card .nm{font-size:1.25rem}.card .bnm{font-size:1rem}.card .wp{font-size:.85rem}
+  .weapons{max-width:640px}.weapon b{font-size:1rem}.weapon small{font-size:.8rem}
+  .ovbtn{font-size:1.2rem;padding:13px 28px}
+  .help{padding:14px 20px}
+}
