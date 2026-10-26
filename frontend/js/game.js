@@ -12,7 +12,7 @@ new ResizeObserver(fit).observe(stage);fit();
 
 // ---------- villains ----------
 const VILLAINS={
-  abuser:{name:'Child Abuser',short:'Abuser',unlock:2000,bn:'শিশু নির্যাতনকারী',
+  abuser:{name:'Child Abuser',short:'Abuser',unlock:1500,bn:'শিশু নির্যাতনকারী',
     base:170,board:'#1f3a33',chalk:['শিশু নির্যাতন অপরাধ','চুপ থাকবো না'],
     sName:'Back of head',sMult:1.6,sTight:.75,sPt:[180,156],sPath:'back',
     ouch:['Ouch!','Maaf koren!','Ami kichu kori nai!','Ar korbo na!'],
@@ -27,7 +27,7 @@ const VILLAINS={
     voice:{pitch:1.25,rate:1.35},
     help:[['999','National Emergency (police)']],
     intro:'The street snatcher who grabs phones and bags from rickshaws. Make him regret it.'},
-  rapist:{name:'Rapist',short:'Rapist',unlock:5000,bn:'ধর্ষক',
+  rapist:{name:'Rapist',short:'Rapist',unlock:3500,bn:'ধর্ষক',
     base:200,board:'#3a1d22',chalk:['ধর্ষকের সর্বোচ্চ শাস্তি চাই','বিচার চাই'],
     sName:'Top of head',sMult:1.6,sTight:.75,sPt:[180,112],sPath:'top',
     ouch:['Amar mama ke chenen?','Ami nirdosh!','Aaargh!','Maaf koren!'],perfBn:['আমার মামাকে চেনেন?','আমি নির্দোষ!','আমার চশমা!','আরে আরে, থামুন!'],missBn:['কিছুই হবে না আমার!','হা হা হা, লাগেনি!','আমার অনেক ক্ষমতা!'],
