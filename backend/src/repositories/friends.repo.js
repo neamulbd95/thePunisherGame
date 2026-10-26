@@ -72,43 +72,5 @@ export function friendsRepo(db) {
       );
       return rows.map((r) => r.id);
     },
-
-    // ----- Facebook friend cache -----
-    async replaceFacebookCache(playerId, facebookIds, q) {
-      await q.query('DELETE FROM facebook_friend_cache WHERE player_id = $1', [playerId]);
-      if (facebookIds.length) {
-        await q.query(
-          `INSERT INTO facebook_friend_cache (player_id, friend_facebook_id)
-           SELECT $1, unnest($2::text[]) ON CONFLICT DO NOTHING`,
-          [playerId, facebookIds],
-        );
-      }
-    },
-
-    async clearFacebookCache(playerId, q = db) {
-      await q.query('DELETE FROM facebook_friend_cache WHERE player_id = $1', [playerId]);
-    },
-
-    /** Local players matching the cached Facebook friends, only while the cache is fresh. */
-    async facebookFriendPlayerIds(playerId, maxAgeHours = 24) {
-      const { rows } = await db.query(
-        `SELECT pl.id
-           FROM facebook_friend_cache c
-           JOIN players pl ON pl.facebook_user_id = c.friend_facebook_id
-          WHERE c.player_id = $1 AND c.fetched_at > now() - ($2 || ' hours')::interval`,
-        [playerId, String(maxAgeHours)],
-      );
-      return rows.map((r) => r.id);
-    },
-
-    async facebookCacheState(playerId, maxAgeHours = 24) {
-      const { rows } = await db.query(
-        `SELECT fb_friends_granted AS granted,
-                (fb_friends_synced_at IS NOT NULL AND fb_friends_synced_at > now() - ($2 || ' hours')::interval) AS fresh
-           FROM players WHERE id = $1`,
-        [playerId, String(maxAgeHours)],
-      );
-      return rows[0] ?? { granted: false, fresh: false };
-    },
   };
 }

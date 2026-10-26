@@ -2,7 +2,6 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { createFacebookService } from './services/facebook.service.js';
 import { createAuthService } from './services/auth.service.js';
 import { createScoreService } from './services/score.service.js';
 import { createLeaderboardService } from './services/leaderboard.service.js';
@@ -19,13 +18,14 @@ import { playerRoutes } from './routes/player.routes.js';
 import { gameRoutes } from './routes/game.routes.js';
 import { leaderboardRoutes } from './routes/leaderboard.routes.js';
 import { friendsRoutes } from './routes/friends.routes.js';
+import { shareRoutes } from './routes/share.routes.js';
 import { ok, fail } from './utils/response.js';
 
 /**
- * Builds the Express app. Everything external (database, Meta client, rate limits) is injected
- * so tests can run the real routes against an in-process PostgreSQL and a mocked Meta.
+ * Builds the Express app. Everything external (database, rate limits) is injected
+ * so tests can run the real routes against an in-process PostgreSQL.
  */
-export function createApp({ env, db, logger, facebook, rateLimits = true }) {
+export function createApp({ env, db, logger, rateLimits = true }) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', env.TRUST_PROXY);
@@ -36,8 +36,7 @@ export function createApp({ env, db, logger, facebook, rateLimits = true }) {
   const leaderboardRepo = makeLeaderboardRepo(db);
   const friendsRepo = makeFriendsRepo(db);
 
-  const fb = facebook ?? createFacebookService(env);
-  const authService = createAuthService({ db, env, logger, facebook: fb, playersRepo, sessionsRepo, friendsRepo });
+  const authService = createAuthService({ env, playersRepo, sessionsRepo });
   const scoreService = createScoreService({ db, logger, gamesRepo, leaderboardRepo });
   const leaderboardService = createLeaderboardService({ leaderboardRepo, friendsRepo });
   const friendsService = createFriendsService({ friendsRepo, playersRepo });
@@ -90,16 +89,16 @@ export function createApp({ env, db, logger, facebook, rateLimits = true }) {
 
   app.use('/api/v1', limiters.general);
   app.use(cookieParser());
-  // The Meta deletion callback is server-to-server (form encoded, no cookies, no Origin) so it is exempt from the CSRF header.
-  app.use((req, res, next) => (req.path === '/api/v1/auth/facebook/data-deletion' ? next() : express.json({ limit: '64kb' })(req, res, next)));
-  app.use((req, res, next) => (req.path === '/api/v1/auth/facebook/data-deletion' ? next() : csrfGuard(env)(req, res, next)));
+  app.use(express.json({ limit: '64kb' }));
+  app.use(csrfGuard(env));
 
   const common = { env, limiters, requireAuth: auth, authService };
-  app.use('/api/v1/auth', authRoutes({ ...common, playersRepo, db }));
+  app.use('/api/v1/auth', authRoutes(common));
   app.use('/api/v1/players', playerRoutes({ ...common, playersRepo, gamesRepo, leaderboardRepo }));
   app.use('/api/v1/game-sessions', gameRoutes({ ...common, scoreService }));
   app.use('/api/v1/leaderboards', leaderboardRoutes({ ...common, leaderboardService }));
   app.use('/api/v1/friends', friendsRoutes({ ...common, friendsService }));
+  app.use('/api/v1/share', shareRoutes({ env, db }));
 
   app.use(notFoundHandler);
   app.use(errorHandler(logger));

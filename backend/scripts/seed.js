@@ -3,6 +3,7 @@
 import 'dotenv/config';
 import pg from 'pg';
 import { newFriendCode } from '../src/utils/crypto.js';
+import { formatHandle } from '../src/utils/nickname.js';
 
 if (process.env.NODE_ENV === 'production') {
   console.error('Refusing to seed a production database.');
@@ -19,11 +20,12 @@ const names = ['Rahim', 'Karim', 'Nusrat', 'Tania', 'Sabbir', 'Mim'];
 const villains = ['abuser', 'robber', 'rapist'];
 try {
   await client.query('BEGIN');
-  for (const [i, name] of names.entries()) {
+  for (const [i, nickname] of names.entries()) {
+    const tag = 1000 + i;
     const { rows } = await client.query(
-      `INSERT INTO players (facebook_user_id, display_name, friend_code) VALUES ($1,$2,$3)
-       ON CONFLICT (facebook_user_id) DO UPDATE SET display_name = EXCLUDED.display_name RETURNING id`,
-      [`seed-${i}`, name, newFriendCode()],
+      `INSERT INTO players (display_name, nickname, tag, friend_code) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (lower(nickname), tag) WHERE nickname IS NOT NULL DO UPDATE SET display_name = EXCLUDED.display_name RETURNING id`,
+      [formatHandle(nickname, tag), nickname, tag, newFriendCode()],
     );
     const villain = villains[i % 3];
     const { rows: s } = await client.query(

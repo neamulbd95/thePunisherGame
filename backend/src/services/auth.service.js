@@ -1,51 +1,52 @@
-import { newToken, sha256 } from '../utils/crypto.js';
-import { unauthorized, forbidden } from '../utils/errors.js';
+import { newToken, sha256, newRecoveryCode, normalizeRecoveryCode, safeEqualHex } from '../utils/crypto.js';
+import { nicknameProblem, parseHandle } from '../utils/nickname.js';
+import { unauthorized, unprocessable } from '../utils/errors.js';
 
 const SESSION_TOUCH_MS = 5 * 60 * 1000;
+const hashRecovery = (code) => sha256(normalizeRecoveryCode(code));
 
-export function createAuthService({ db, env, logger, facebook, playersRepo, sessionsRepo, friendsRepo }) {
-  /** Refreshes the cached list of Facebook friends who also play. Never throws: login must still work. */
-  async function syncFriends(playerId, accessToken, granted) {
-    try {
-      if (!granted) {
-        await db.tx(async (t) => {
-          await friendsRepo.clearFacebookCache(playerId, t);
-          await playersRepo.setFriendsPermission(playerId, false, t);
-        });
-        return false;
-      }
-      const ids = await facebook.fetchAppFriends(accessToken);
-      await db.tx(async (t) => {
-        await friendsRepo.replaceFacebookCache(playerId, ids, t);
-        await playersRepo.setFriendsPermission(playerId, true, t);
-      });
-      return true;
-    } catch (err) {
-      logger.warn({ code: err.code, status: err.status }, 'facebook friends sync failed');
-      return false;
-    }
+/**
+ * Players are anonymous: a nickname, a server-assigned #tag, and this browser (a long-lived HttpOnly session cookie).
+ * A recovery code (only its hash is stored) lets the same player continue on another browser or after clearing data.
+ */
+export function createAuthService({ env, playersRepo, sessionsRepo }) {
+  /** Opens a server-side session and returns the raw token (only its hash is stored). */
+  async function startSession(playerId) {
+    const token = newToken();
+    const expiresAt = new Date(Date.now() + env.sessionTtlMs);
+    await sessionsRepo.create({ playerId, tokenHash: sha256(token), expiresAt });
+    return { token, expiresAt };
   }
 
   return {
-    async loginWithFacebook(accessToken) {
-      // Identity always comes from Meta, never from the request body.
-      const profile = await facebook.verifyAndFetchProfile(accessToken);
-      const row = await playersRepo.upsertFacebookPlayer(profile);
-      const token = newToken();
-      const expiresAt = new Date(Date.now() + env.sessionTtlMs);
-      await sessionsRepo.create({ playerId: row.id, tokenHash: sha256(token), expiresAt });
-      await syncFriends(row.id, accessToken, profile.grantedFriends);
-      const player = await playersRepo.findById(row.id);
-      return { token, expiresAt, player, isNew: row.inserted === true };
+    /** Creates a new player. The recovery code is returned once and never stored in clear text. */
+    async register(nickname) {
+      const problem = nicknameProblem(nickname);
+      if (problem) throw unprocessable('That nickname cannot be used', [{ field: 'nickname', message: problem }]);
+      const recoveryCode = newRecoveryCode();
+      const player = await playersRepo.createPlayer({ nickname, recoveryHash: hashRecovery(recoveryCode) });
+      const { token, expiresAt } = await startSession(player.id);
+      return { token, expiresAt, player, recoveryCode };
     },
 
-    /** Re-checks a fresh Facebook token for the *current* player and refreshes the friends cache. */
-    async syncFacebookFriends(playerId, accessToken) {
-      const profile = await facebook.verifyAndFetchProfile(accessToken);
-      const ownFbId = await playersRepo.findFacebookId(playerId);
-      if (!ownFbId || ownFbId !== profile.facebookUserId) throw forbidden('Token belongs to a different Facebook user');
-      const ok = await syncFriends(playerId, accessToken, profile.grantedFriends);
-      return { enabled: ok };
+    /** Continue as an existing player on a new device with "Nickname#0042" + the recovery code. */
+    async recover(handle, recoveryCode) {
+      const parsed = parseHandle(handle);
+      // One answer for every failure so nobody can probe which names exist.
+      const fail = () => unauthorized('No player matches that name and recovery code');
+      if (!parsed) throw fail();
+      const row = await playersRepo.findForRecovery(parsed.nickname, parsed.tag);
+      if (!row?.recovery_hash || !safeEqualHex(hashRecovery(recoveryCode), row.recovery_hash)) throw fail();
+      await playersRepo.touchLogin(row.id);
+      const { token, expiresAt } = await startSession(row.id);
+      return { token, expiresAt, player: await playersRepo.findById(row.id) };
+    },
+
+    /** Replaces the recovery code (the old one stops working). */
+    async newRecoveryCode(playerId) {
+      const code = newRecoveryCode();
+      await playersRepo.setRecoveryHash(playerId, hashRecovery(code));
+      return code;
     },
 
     /** Resolves a raw cookie token to the player, or throws 401. */

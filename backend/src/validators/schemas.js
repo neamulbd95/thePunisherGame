@@ -2,11 +2,22 @@ import { z } from 'zod';
 import { VILLAINS, WEAPON_IDS, END_REASONS, STAGES, MAX_MISSES, TIME_LIMIT_MS } from '../utils/game-rules.js';
 import { PERIODS } from '../utils/periods.js';
 
-export const facebookLoginBody = z.strictObject({
-  accessToken: z.string().min(10).max(4096),
-});
+import { NICKNAME_MIN, NICKNAME_MAX } from '../utils/nickname.js';
 
-export const facebookSyncBody = facebookLoginBody;
+// Letters of any script (Bengali too), digits, _ and -; the blocklist and reserved names are checked in the auth service.
+const nickname = z
+  .string()
+  .trim()
+  .min(NICKNAME_MIN, `Use ${NICKNAME_MIN}-${NICKNAME_MAX} characters.`)
+  .max(NICKNAME_MAX, `Use ${NICKNAME_MIN}-${NICKNAME_MAX} characters.`)
+  .regex(/^[\p{L}\p{M}\p{N}_-]+$/u, 'Use letters, numbers, underscore or dash (no spaces or #)');
+
+export const registerBody = z.strictObject({ nickname });
+
+export const recoverBody = z.strictObject({
+  handle: z.string().trim().min(5).max(40), // "Nickname#0042"
+  recoveryCode: z.string().trim().min(8).max(40),
+});
 
 export const startGameBody = z.strictObject({
   villain: z.enum(VILLAINS),
@@ -45,12 +56,4 @@ export const friendRequestBody = z.strictObject({
     .regex(/^[A-Z2-9]{6,16}$/, 'Invalid friend code'),
 });
 
-export const updateProfileBody = z.strictObject({
-  displayName: z
-    .string()
-    .trim()
-    .min(2)
-    .max(24)
-    // letters (any script, so Bengali names work), digits, spaces and a few separators
-    .regex(/^[\p{L}\p{M}\p{N} ._-]+$/u, 'Use letters, numbers, spaces, dot, dash or underscore'),
-});
+export const updateProfileBody = registerBody; // { nickname }: the server assigns a new #tag

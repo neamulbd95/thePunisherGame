@@ -36,17 +36,5 @@ export function createLeaderboardService({ leaderboardRepo, friendsRepo }) {
       const ids = await friendsRepo.friendIds(meId);
       return build({ ...q, meId, playerIds: [meId, ...ids] }, now);
     },
-
-    /**
-     * Facebook friends who also play. Only available when Meta granted user_friends and the
-     * cached list is fresh; otherwise returns an explicit "unavailable" state, never a fake list.
-     */
-    async facebookFriends(q, meId, now) {
-      const state = await friendsRepo.facebookCacheState(meId);
-      if (!state.granted) return { available: false, reason: 'PERMISSION_MISSING' };
-      if (!state.fresh) return { available: false, reason: 'NEEDS_REFRESH' };
-      const ids = await friendsRepo.facebookFriendPlayerIds(meId);
-      return { available: true, ...(await build({ ...q, meId, playerIds: [meId, ...ids] }, now)) };
-    },
   };
 }

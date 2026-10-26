@@ -1,13 +1,10 @@
-import express, { Router } from 'express';
-import crypto from 'node:crypto';
+import { Router } from 'express';
 import { handler, validate } from '../middleware/common.js';
-import { facebookLoginBody } from '../validators/schemas.js';
-import { ok } from '../utils/response.js';
+import { registerBody, recoverBody } from '../validators/schemas.js';
+import { created, ok } from '../utils/response.js';
 import { toPublicPlayer } from '../repositories/players.repo.js';
-import { parseSignedRequest } from '../services/facebook.service.js';
-import { badRequest, notFound } from '../utils/errors.js';
 
-export function authRoutes({ env, authService, playersRepo, db, requireAuth, limiters }) {
+export function authRoutes({ env, authService, requireAuth, limiters }) {
   const r = Router();
 
   const cookieOpts = () => ({
@@ -17,15 +14,29 @@ export function authRoutes({ env, authService, playersRepo, db, requireAuth, lim
     path: '/',
     domain: env.COOKIE_DOMAIN || undefined,
   });
+  const setSession = (res, token, expiresAt) => res.cookie(env.SESSION_COOKIE_NAME, token, { ...cookieOpts(), expires: expiresAt });
 
+  // Create a player: pick a nickname, get Nickname#tag, a device session and a one-time recovery code.
   r.post(
-    '/facebook',
-    limiters.auth,
-    validate({ body: facebookLoginBody }),
+    '/register',
+    limiters.signup,
+    validate({ body: registerBody }),
     handler(async (req, res) => {
-      const { token, expiresAt, player, isNew } = await authService.loginWithFacebook(req.valid.body.accessToken);
-      res.cookie(env.SESSION_COOKIE_NAME, token, { ...cookieOpts(), expires: expiresAt });
-      ok(res, { player: toPublicPlayer(player), isNew, sessionExpiresAt: expiresAt });
+      const { token, expiresAt, player, recoveryCode } = await authService.register(req.valid.body.nickname);
+      setSession(res, token, expiresAt);
+      created(res, { player: toPublicPlayer(player), recoveryCode, sessionExpiresAt: expiresAt });
+    }),
+  );
+
+  // Continue as an existing player on another browser.
+  r.post(
+    '/recover',
+    limiters.auth,
+    validate({ body: recoverBody }),
+    handler(async (req, res) => {
+      const { token, expiresAt, player } = await authService.recover(req.valid.body.handle, req.valid.body.recoveryCode);
+      setSession(res, token, expiresAt);
+      ok(res, { player: toPublicPlayer(player), sessionExpiresAt: expiresAt });
     }),
   );
 
@@ -35,43 +46,20 @@ export function authRoutes({ env, authService, playersRepo, db, requireAuth, lim
     handler(async (req, res) => ok(res, { player: toPublicPlayer(req.player) })),
   );
 
+  // A fresh recovery code; the previous one stops working.
+  r.post(
+    '/recovery-code',
+    requireAuth,
+    limiters.auth,
+    handler(async (req, res) => ok(res, { recoveryCode: await authService.newRecoveryCode(req.player.id) })),
+  );
+
   r.post(
     '/logout',
     handler(async (req, res) => {
       await authService.logout(req.cookies?.[env.SESSION_COOKIE_NAME]);
       res.clearCookie(env.SESSION_COOKIE_NAME, cookieOpts());
       ok(res, { loggedOut: true });
-    }),
-  );
-
-  // ----- Meta "Data Deletion Request Callback" (server to server, form encoded) -----
-  r.post(
-    '/facebook/data-deletion',
-    express.urlencoded({ extended: false, limit: '8kb' }),
-    handler(async (req, res) => {
-      if (!env.FACEBOOK_APP_SECRET) throw badRequest('Not configured');
-      const data = parseSignedRequest(req.body?.signed_request, env.FACEBOOK_APP_SECRET);
-      if (!data?.user_id) throw badRequest('signed_request has no user_id');
-      const code = crypto.randomBytes(9).toString('base64url');
-      const removed = await playersRepo.deleteByFacebookId(String(data.user_id));
-      await db.query(
-        `INSERT INTO data_deletion_requests (confirmation_code, completed_at, status) VALUES ($1, now(), $2)`,
-        [code, removed ? 'completed' : 'not_found'],
-      );
-      // Meta expects exactly { url, confirmation_code }.
-      res.json({ url: `${env.frontendOrigins[0]}/deletion.html?code=${code}`, confirmation_code: code });
-    }),
-  );
-
-  r.get(
-    '/facebook/data-deletion/:code',
-    handler(async (req, res) => {
-      const { rows } = await db.query(
-        'SELECT status, requested_at, completed_at FROM data_deletion_requests WHERE confirmation_code = $1',
-        [String(req.params.code).slice(0, 40)],
-      );
-      if (!rows[0]) throw notFound('Unknown confirmation code');
-      ok(res, { status: rows[0].status, requestedAt: rows[0].requested_at, completedAt: rows[0].completed_at });
     }),
   );
 

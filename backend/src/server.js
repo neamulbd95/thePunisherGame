@@ -18,7 +18,7 @@ const app = createApp({ env, db, logger });
 
 // Render requires binding to 0.0.0.0 on process.env.PORT.
 const server = app.listen(env.PORT, '0.0.0.0', () => {
-  logger.info({ port: env.PORT, env: env.NODE_ENV, facebookMock: env.FACEBOOK_MOCK }, 'API listening');
+  logger.info({ port: env.PORT, env: env.NODE_ENV }, 'API listening');
 });
 
 let closing = false;

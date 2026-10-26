@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { handler, validate } from '../middleware/common.js';
-import { friendRequestBody, uuidParam, facebookSyncBody } from '../validators/schemas.js';
+import { friendRequestBody, uuidParam } from '../validators/schemas.js';
 import { ok, created } from '../utils/response.js';
 
-export function friendsRoutes({ friendsService, authService, requireAuth, limiters }) {
+export function friendsRoutes({ friendsService, requireAuth, limiters }) {
   const r = Router();
   r.use(requireAuth);
 
@@ -47,14 +47,6 @@ export function friendsRoutes({ friendsService, authService, requireAuth, limite
       await friendsService.reject(req.player.id, req.valid.params.id);
       ok(res, { rejected: true });
     }),
-  );
-
-  // Refresh the "Facebook friends who play" cache using a fresh Facebook token from the browser.
-  r.post(
-    '/facebook/sync',
-    limiters.auth,
-    validate({ body: facebookSyncBody }),
-    handler(async (req, res) => ok(res, await authService.syncFacebookFriends(req.player.id, req.valid.body.accessToken))),
   );
 
   return r;

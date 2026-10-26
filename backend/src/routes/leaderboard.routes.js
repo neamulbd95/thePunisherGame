@@ -38,13 +38,5 @@ export function leaderboardRoutes({ leaderboardService, authService, env }) {
     handler(async (req, res) => ok(res, await leaderboardService.gameFriends(req.valid.query, req.player.id))),
   );
 
-  r.get(
-    '/facebook-friends',
-    optionalAuth,
-    needAuth,
-    validate({ query: leaderboardQuery }),
-    handler(async (req, res) => ok(res, await leaderboardService.facebookFriends(req.valid.query, req.player.id))),
-  );
-
   return r;
 }

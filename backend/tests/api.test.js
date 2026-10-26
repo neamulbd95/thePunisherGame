@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import crypto from 'node:crypto';
-import { createTestDb, resetDb, buildApp, loginAs, playGame, makeRun, makeCleared, ageSession, grantScore, testEnv, CSRF } from './helpers.js';
+import { createTestDb, resetDb, buildApp, loginAs, nick, playGame, makeRun, makeCleared, ageSession, grantScore, CSRF } from './helpers.js';
 
 let db;
 let app;
@@ -66,12 +66,15 @@ describe('health & plumbing', () => {
   });
 
   it('rejects oversized bodies', async () => {
-    const res = await request(app).post('/api/v1/auth/facebook').set(CSRF).send({ accessToken: 'x'.repeat(200_000) });
+    const res = await request(app).post('/api/v1/auth/register').set(CSRF).send({ nickname: 'x'.repeat(200_000) });
     expect(res.status).toBe(413);
   });
 });
 
-describe('authentication & sessions', () => {
+describe('players: nickname#tag, device session and recovery code', () => {
+  const register = (nickname, a = app) => request(a).post('/api/v1/auth/register').set(CSRF).send({ nickname });
+  const sha = (x) => crypto.createHash('sha256').update(x).digest('hex');
+
   it('rejects unauthenticated access', async () => {
     for (const [m, p] of [['get', '/api/v1/players/me'], ['get', '/api/v1/auth/me'], ['post', '/api/v1/game-sessions'], ['get', '/api/v1/friends']]) {
       const res = await request(app)[m](p).set(CSRF).send({});
@@ -80,74 +83,133 @@ describe('authentication & sessions', () => {
     }
   });
 
-  it('creates a player and a hardened cookie on first login, and does not duplicate on repeat login', async () => {
-    const first = await loginAs(app, 'fb-1', 'Rahim');
-    const cookie = first.res.headers['set-cookie'][0];
+  it('creates a player with a #tag, a year-long HttpOnly device cookie and a one-time recovery code', async () => {
+    const res = await register('Rahim');
+    expect(res.status).toBe(201);
+    const { player, recoveryCode } = res.body.data;
+    expect(player.displayName).toMatch(/^Rahim#\d{4}$/);
+    expect(player).toMatchObject({ nickname: 'Rahim', avatarUrl: null });
+    expect(recoveryCode).toMatch(/^([A-Z2-9]{4}-){4}[A-Z2-9]{4}$/);
+
+    const cookie = res.headers['set-cookie'][0];
     expect(cookie).toMatch(/HttpOnly/i);
     expect(cookie).toMatch(/SameSite=Lax/i);
-    expect(first.res.body.data.isNew).toBe(true);
-    expect(JSON.stringify(first.res.body)).not.toMatch(/facebook_user_id|token/i);
+    const expires = new Date(/Expires=([^;]+)/i.exec(cookie)[1]).getTime();
+    expect(expires - Date.now()).toBeGreaterThan(300 * 24 * 3600 * 1000); // "tracked by device": about a year
 
-    const again = await loginAs(app, 'fb-1', 'Rahim');
-    expect(again.res.body.data.isNew).toBe(false);
-    expect(again.player.id).toBe(first.player.id);
-    expect(await count('players')).toBe(1);
-    expect(await count('auth_sessions')).toBe(2);
+    // the recovery code is stored only as a hash and is not echoed again
+    const row = (await db.query('SELECT display_name, nickname, tag, recovery_hash FROM players')).rows[0];
+    expect(row.display_name).toBe(player.displayName);
+    expect(row.recovery_hash).toBe(sha(recoveryCode.replace(/-/g, '')));
+    expect(row.recovery_hash).not.toContain(recoveryCode);
+    const me = await request.agent(app).get('/api/v1/auth/me');
+    expect(me.status).toBe(401); // a different browser is not that player
   });
 
-  it('stores only a hash of the session token', async () => {
-    const { res } = await loginAs(app, 'fb-1');
+  it('the same nickname can exist many times: only the #tag differs (case-insensitively unique)', async () => {
+    const handles = new Set();
+    for (let i = 0; i < 25; i++) handles.add((await register(i % 2 ? 'rahim' : 'RAHIM')).body.data.player.displayName.toLowerCase());
+    expect(handles.size).toBe(25);
+    expect(await count('players')).toBe(25);
+  });
+
+  it('stores only a hash of the session token and keeps the player logged in across requests', async () => {
+    const { agent, res, player } = await loginAs(app, 'k1', 'Rahim');
     const token = /game_session=([^;]+)/.exec(res.headers['set-cookie'][0])[1];
     const rows = (await db.query('SELECT token_hash FROM auth_sessions')).rows;
     expect(rows[0].token_hash).not.toBe(token);
-    expect(rows[0].token_hash).toBe(crypto.createHash('sha256').update(decodeURIComponent(token)).digest('hex'));
-  });
-
-  it('GET /auth/me returns the profile; the login persists across requests', async () => {
-    const { agent, player } = await loginAs(app, 'fb-1', 'Rahim');
+    expect(rows[0].token_hash).toBe(sha(decodeURIComponent(token)));
     const me = await agent.get('/api/v1/auth/me');
     expect(me.status).toBe(200);
     expect(me.body.data.player.id).toBe(player.id);
   });
 
+  it('accepts Bengali nicknames and rejects bad ones', async () => {
+    expect((await register('নীরব_প্রতিবাদ')).status).toBe(201);
+    for (const bad of ['ab', 'x'.repeat(17), 'two words', 'with#hash', '<script>', 'a/b', '   ']) {
+      const r = await register(bad);
+      expect(r.status, bad).toBe(422);
+    }
+    for (const bad of ['Admin', 'M0derator', 'banglapunisher', 'F_u_c_k', 'sh1t', 'xX_Hitler_Xx', 'RAPIST']) {
+      const r = await register(bad);
+      expect(r.status, bad).toBe(422);
+      expect(r.body.error.details[0].field).toBe('nickname');
+    }
+    expect((await register('Punisher')).status).toBe(201); // ordinary words are fine
+    expect((await request(app).post('/api/v1/auth/register').set(CSRF).send({ nickname: 'Okname', playerId: 'x' })).status).toBe(422);
+    expect((await request(app).post('/api/v1/auth/register').send({ nickname: 'Okname' })).status).toBe(403); // CSRF header required
+  });
+
   it('logout revokes the session server-side', async () => {
-    const { agent, res } = await loginAs(app, 'fb-1');
+    const { agent, res } = await loginAs(app, 'k1', 'Rahim');
     const cookie = res.headers['set-cookie'][0].split(';')[0];
     expect((await agent.post('/api/v1/auth/logout').set(CSRF)).status).toBe(200);
     expect((await agent.get('/api/v1/auth/me')).status).toBe(401);
-    // Replaying the old cookie must fail too.
-    expect((await request(app).get('/api/v1/auth/me').set('Cookie', cookie)).status).toBe(401);
+    expect((await request(app).get('/api/v1/auth/me').set('Cookie', cookie)).status).toBe(401); // replaying the old cookie fails too
   });
 
   it('rejects expired sessions', async () => {
-    const { agent } = await loginAs(app, 'fb-1');
+    const { agent } = await loginAs(app, 'k1', 'Rahim');
     await db.query(`UPDATE auth_sessions SET created_at = now() - interval '2 days', expires_at = now() - interval '1 day'`);
     expect((await agent.get('/api/v1/auth/me')).status).toBe(401);
   });
 
-  it('rejects invalid tokens and malformed bodies', async () => {
-    const bad = await request(app).post('/api/v1/auth/facebook').set(CSRF).send({ accessToken: 'not-a-valid-mock-token' });
-    expect(bad.status).toBe(401);
-    const malformed = await request(app).post('/api/v1/auth/facebook').set(CSRF).send({ accessToken: 'short' });
-    expect(malformed.status).toBe(422);
-    const extra = await request(app).post('/api/v1/auth/facebook').set(CSRF).send({ accessToken: 'mock:1:A', playerId: 'x' });
-    expect(extra.status).toBe(422);
+  it('recovery: nickname#tag + code restores the same player on another browser', async () => {
+    const first = await loginAs(app, 'k1', 'Rahim');
+    await playGame(db, first.agent); // some progress to carry over
+    const other = request.agent(app);
+    const sloppy = first.recoveryCode.toLowerCase().replace(/-/g, ' '); // however the player typed it
+    const res = await other.post('/api/v1/auth/recover').set(CSRF).send({ handle: first.player.displayName.toLowerCase(), recoveryCode: sloppy });
+    expect(res.status).toBe(200);
+    expect(res.body.data.player.id).toBe(first.player.id);
+    expect((await other.get('/api/v1/auth/me')).body.data.player.id).toBe(first.player.id);
+    expect((await other.get('/api/v1/players/me/stats')).body.data.gamesPlayed).toBe(1);
+    expect(await count('players')).toBe(1);
   });
 
-  it('rate limits login attempts', async () => {
+  it('recovery fails with one identical answer for a wrong code, an unknown name and a malformed name', async () => {
+    const a = await loginAs(app, 'k1', 'Rahim');
+    const attempt = (handle, recoveryCode) => request(app).post('/api/v1/auth/recover').set(CSRF).send({ handle, recoveryCode });
+    const wrongCode = await attempt(a.player.displayName, 'AAAA-BBBB-CCCC-DDDD-EEEE');
+    const unknown = await attempt('Nobody#0001', a.recoveryCode);
+    const malformed = await attempt('Rahim', a.recoveryCode);
+    for (const r of [wrongCode, unknown, malformed]) expect(r.status).toBe(401);
+    expect(new Set([wrongCode, unknown, malformed].map((r) => r.body.error.message)).size).toBe(1);
+    expect((await request(app).post('/api/v1/auth/recover').send({ handle: a.player.displayName, recoveryCode: a.recoveryCode })).status).toBe(403);
+  });
+
+  it('a new recovery code replaces the old one', async () => {
+    const a = await loginAs(app, 'k1', 'Rahim');
+    const fresh = await a.agent.post('/api/v1/auth/recovery-code').set(CSRF);
+    expect(fresh.status).toBe(200);
+    const code = fresh.body.data.recoveryCode;
+    expect(code).toMatch(/^([A-Z2-9]{4}-){4}[A-Z2-9]{4}$/);
+    const attempt = (c) => request(app).post('/api/v1/auth/recover').set(CSRF).send({ handle: a.player.displayName, recoveryCode: c });
+    expect((await attempt(a.recoveryCode)).status).toBe(401);
+    expect((await attempt(code)).status).toBe(200);
+    expect((await request(app).post('/api/v1/auth/recovery-code').set(CSRF)).status).toBe(401); // needs a session
+  });
+
+  it('rate limits sign-ups', async () => {
     const limited = buildApp(db, { rateLimits: true });
     let last;
-    for (let i = 0; i < 31; i++) last = await request(limited).post('/api/v1/auth/facebook').set(CSRF).send({ accessToken: 'mock:bad' });
+    for (let i = 0; i < 31; i++) last = await register('Spammer', limited);
     expect(last.status).toBe(429);
     expect(last.body.error.code).toBe('RATE_LIMITED');
   });
 
-  it('lets players choose a nickname', async () => {
-    const { agent } = await loginAs(app, 'fb-1', 'Rahim');
-    const ok = await agent.patch('/api/v1/players/me').set(CSRF).send({ displayName: 'নীরব প্রতিবাদ' });
-    expect(ok.status).toBe(200);
-    expect(ok.body.data.player.displayName).toBe('নীরব প্রতিবাদ');
-    expect((await agent.patch('/api/v1/players/me').set(CSRF).send({ displayName: '<script>' })).status).toBe(422);
+  it('changing the nickname assigns a new #tag; a case change keeps the tag; the same checks apply', async () => {
+    const { agent, player } = await loginAs(app, 'k1', 'Rahim');
+    const renamed = await agent.patch('/api/v1/players/me').set(CSRF).send({ nickname: 'নীরব' + '_প্রতিবাদ' });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.data.player.displayName).toMatch(/^নীরব_প্রতিবাদ#\d{4}$/);
+    const case1 = await agent.patch('/api/v1/players/me').set(CSRF).send({ nickname: 'Hero' });
+    const case2 = await agent.patch('/api/v1/players/me').set(CSRF).send({ nickname: 'HERO' });
+    expect(case2.body.data.player.tag).toBe(case1.body.data.player.tag);
+    expect(case2.body.data.player.displayName).toBe(`HERO#${String(case1.body.data.player.tag).padStart(4, '0')}`);
+    expect(case2.body.data.player.id).toBe(player.id);
+    expect((await agent.patch('/api/v1/players/me').set(CSRF).send({ nickname: 'shit' })).status).toBe(422);
+    expect((await agent.patch('/api/v1/players/me').set(CSRF).send({ displayName: 'Old' })).status).toBe(422);
   });
 });
 
@@ -357,12 +419,12 @@ describe('global leaderboard', () => {
 
     const res = await a.agent.get('/api/v1/leaderboards/global');
     expect(res.status).toBe(200);
-    const names = res.body.data.players.map((p) => p.displayName.split(' ')[0]);
+    const names = res.body.data.players.map((p) => nick(p.displayName));
     expect(names).toEqual(['Aaa', 'Bbb', 'Ccc']);
     expect(res.body.data.players.map((p) => p.rank)).toEqual([1, 2, 3]);
     expect(res.body.data).toMatchObject({ period: 'all-time', totalPlayers: 3, myRank: 1 });
     expect(res.body.data.players[0].isMe).toBe(true);
-    expect(JSON.stringify(res.body)).not.toMatch(/friend_?code|facebook/i);
+    expect(JSON.stringify(res.body)).not.toMatch(/friend_?code|recovery|session|token/i);
 
     const guest = await request(app).get('/api/v1/leaderboards/global');
     expect(guest.body.data.myRank).toBeNull();
@@ -378,7 +440,7 @@ describe('global leaderboard', () => {
     expect(page2.body.data.players).toHaveLength(1);
     expect(page2.body.data.players[0].rank).toBe(2);
     const robber = await request(app).get('/api/v1/leaderboards/global?villain=robber');
-    expect(robber.body.data.players.map((p) => p.displayName)).toEqual(['Bbb']);
+    expect(robber.body.data.players.map((p) => nick(p.displayName))).toEqual(['Bbb']);
     expect((await request(app).get('/api/v1/leaderboards/global?limit=1000')).status).toBe(422);
     expect((await request(app).get('/api/v1/leaderboards/global?period=yearly')).status).toBe(422);
   });
@@ -392,9 +454,9 @@ describe('global leaderboard', () => {
     await playGame(db, c.agent);
     // push b back 3 days, c back 40 days
     const ids = (await db.query('SELECT id, player_id FROM game_scores')).rows;
-    const byPlayer = Object.fromEntries((await db.query('SELECT id, facebook_user_id FROM players')).rows.map((p) => [p.facebook_user_id, p.id]));
-    await db.query(`UPDATE game_scores SET submitted_at = now() - interval '3 days' WHERE player_id = $1`, [byPlayer['fb-b']]);
-    await db.query(`UPDATE game_scores SET submitted_at = now() - interval '40 days' WHERE player_id = $1`, [byPlayer['fb-c']]);
+    const byPlayer = Object.fromEntries((await db.query('SELECT id, nickname FROM players')).rows.map((p) => [p.nickname, p.id]));
+    await db.query(`UPDATE game_scores SET submitted_at = now() - interval '3 days' WHERE player_id = $1`, [byPlayer.Bbb]);
+    await db.query(`UPDATE game_scores SET submitted_at = now() - interval '40 days' WHERE player_id = $1`, [byPlayer.Ccc]);
     expect(ids).toHaveLength(3);
 
     const total = async (period) => (await request(app).get(`/api/v1/leaderboards/global?period=${period}`)).body.data.totalPlayers;
@@ -419,15 +481,15 @@ describe('in-game friends', () => {
     expect((await a.agent.post('/api/v1/friends/requests').set(CSRF).send({ friendCode: b.player.friendCode })).status).toBe(409);
 
     const incoming = await b.agent.get('/api/v1/friends/requests');
-    expect(incoming.body.data.requests[0]).toMatchObject({ direction: 'incoming', displayName: 'Aaa' });
+    expect(incoming.body.data.requests[0]).toMatchObject({ direction: 'incoming', displayName: a.player.displayName });
     // the requester cannot accept their own request, and strangers cannot either
     expect((await a.agent.post(`/api/v1/friends/requests/${sent.body.data.id}/accept`).set(CSRF)).status).toBe(404);
     expect((await c.agent.post(`/api/v1/friends/requests/${sent.body.data.id}/accept`).set(CSRF)).status).toBe(404);
     expect((await b.agent.post(`/api/v1/friends/requests/${sent.body.data.id}/accept`).set(CSRF)).status).toBe(200);
 
     const board = await a.agent.get('/api/v1/leaderboards/game-friends');
-    expect(board.body.data.players.map((p) => p.displayName).sort()).toEqual(['Aaa', 'Bbb']);
-    expect((await c.agent.get('/api/v1/leaderboards/game-friends')).body.data.players.map((p) => p.displayName)).toEqual(['Ccc']);
+    expect(board.body.data.players.map((p) => nick(p.displayName)).sort()).toEqual(['Aaa', 'Bbb']);
+    expect((await c.agent.get('/api/v1/leaderboards/game-friends')).body.data.players.map((p) => nick(p.displayName))).toEqual(['Ccc']);
 
     const list = await a.agent.get('/api/v1/friends');
     expect(list.body.data.friends).toHaveLength(1);
@@ -456,90 +518,64 @@ describe('in-game friends', () => {
 
   it('requires login for friend boards', async () => {
     expect((await request(app).get('/api/v1/leaderboards/game-friends')).status).toBe(401);
-    expect((await request(app).get('/api/v1/leaderboards/facebook-friends')).status).toBe(401);
   });
 });
 
-describe('Facebook friends leaderboard', () => {
-  it('reports "unavailable" when user_friends was not granted, and never fakes a list', async () => {
-    const a = await loginAs(app, 'fb-a', 'Aaa');
-    await playGame(db, a.agent);
-    const res = await a.agent.get('/api/v1/leaderboards/facebook-friends');
-    expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({ available: false, reason: 'PERMISSION_MISSING' });
-  });
-
-  it('ranks only Facebook friends who play when permission is granted', async () => {
-    const b = await loginAs(app, 'fb-b', 'Bbb');
-    const c = await loginAs(app, 'fb-c', 'Ccc');
-    await playGame(db, b.agent);
-    await playGame(db, c.agent);
-    const a = await loginAs(app, 'fb-a', 'Aaa', ':friends=fb-b,fb-unknown');
-    await playGame(db, a.agent);
-
-    const res = await a.agent.get('/api/v1/leaderboards/facebook-friends');
-    expect(res.body.data.available).toBe(true);
-    expect(res.body.data.players.map((p) => p.displayName).sort()).toEqual(['Aaa', 'Bbb']); // Ccc is not A's friend
-  });
-
-  it('forgets friends when permission is later revoked', async () => {
-    await loginAs(app, 'fb-b', 'Bbb');
-    const a = await loginAs(app, 'fb-a', 'Aaa', ':friends=fb-b');
-    expect(await count('facebook_friend_cache')).toBe(1);
-    await loginAs(app, 'fb-a', 'Aaa'); // logs in again without user_friends
-    expect(await count('facebook_friend_cache')).toBe(0);
-    expect((await a.agent.get('/api/v1/leaderboards/facebook-friends')).body.data.available).toBe(false);
-  });
-
-  it('treats a stale cache as unavailable until refreshed', async () => {
-    await loginAs(app, 'fb-b', 'Bbb');
-    const a = await loginAs(app, 'fb-a', 'Aaa', ':friends=fb-b');
-    await db.query(`UPDATE players SET fb_friends_synced_at = now() - interval '2 days' WHERE facebook_user_id = 'fb-a'`);
-    expect((await a.agent.get('/api/v1/leaderboards/facebook-friends')).body.data).toEqual({ available: false, reason: 'NEEDS_REFRESH' });
-    const sync = await a.agent.post('/api/v1/friends/facebook/sync').set(CSRF).send({ accessToken: 'mock:fb-a:Aaa:friends=fb-b' });
-    expect(sync.body.data.enabled).toBe(true);
-    expect((await a.agent.get('/api/v1/leaderboards/facebook-friends')).body.data.available).toBe(true);
-  });
-
-  it("refuses to sync with someone else's Facebook token", async () => {
-    const a = await loginAs(app, 'fb-a', 'Aaa');
-    const res = await a.agent.post('/api/v1/friends/facebook/sync').set(CSRF).send({ accessToken: 'mock:fb-other:Eve:friends=fb-a' });
-    expect(res.status).toBe(403);
-  });
-});
-
-describe('account deletion & Meta data-deletion callback', () => {
+describe('account deletion', () => {
   it('DELETE /players/me removes everything about the player', async () => {
-    const a = await loginAs(app, 'fb-a', 'Aaa', ':friends=fb-b');
-    const b = await loginAs(app, 'fb-b', 'Bbb');
+    const a = await loginAs(app, 'k1', 'Aaa');
+    const b = await loginAs(app, 'k2', 'Bbb');
     await playGame(db, a.agent);
     await a.agent.post('/api/v1/friends/requests').set(CSRF).send({ friendCode: b.player.friendCode });
     expect((await a.agent.delete('/api/v1/players/me').set(CSRF)).status).toBe(200);
-    for (const t of ['game_scores', 'game_sessions', 'auth_sessions', 'player_friendships', 'facebook_friend_cache']) {
-      const n = (await db.query(`SELECT count(*)::int AS n FROM ${t} WHERE player_id = (SELECT id FROM players WHERE facebook_user_id = 'fb-a')`)).rows[0].n;
+    for (const t of ['game_scores', 'game_sessions', 'auth_sessions', 'player_friendships']) {
+      const n = (await db.query(`SELECT count(*)::int AS n FROM ${t} WHERE player_id = $1`, [a.player.id])).rows[0].n;
       expect(n, t).toBe(0);
     }
     expect((await a.agent.get('/api/v1/auth/me')).status).toBe(401);
+    // the recovery code is gone with the account
+    expect((await request(app).post('/api/v1/auth/recover').set(CSRF).send({ handle: a.player.displayName, recoveryCode: a.recoveryCode })).status).toBe(401);
     expect(await count('players')).toBe(1);
   });
+});
 
-  it('data-deletion callback verifies the signature and deletes the user', async () => {
-    const env = testEnv();
-    await loginAs(app, 'fb-9', 'Nine');
-    const sign = (payload, secret) => {
-      const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-      return `${crypto.createHmac('sha256', secret).update(body).digest('base64url')}.${body}`;
-    };
-    const forged = await request(app).post('/api/v1/auth/facebook/data-deletion').type('form').send({ signed_request: sign({ user_id: 'fb-9' }, 'wrong') });
-    expect(forged.status).toBe(401);
-    expect(await count('players')).toBe(1);
+describe('share page (Facebook preview)', () => {
+  const FB_BOT = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uagent.php)';
 
-    const res = await request(app).post('/api/v1/auth/facebook/data-deletion').type('form').send({ signed_request: sign({ user_id: 'fb-9' }, env.FACEBOOK_APP_SECRET) });
+  async function savedScore() {
+    const a = await loginAs(app, 'k1', 'Aaa');
+    const { done } = await playGame(db, a.agent);
+    return { a, scoreId: done.body.data.scoreId, score: done.body.data.score };
+  }
+
+  it('serves Open Graph tags to the Facebook crawler (nickname#tag, score, villain, image)', async () => {
+    const { a, scoreId, score } = await savedScore();
+    const res = await request(app).get(`/api/v1/share/score/${scoreId}`).set('User-Agent', FB_BOT);
     expect(res.status).toBe(200);
-    expect(Object.keys(res.body).sort()).toEqual(['confirmation_code', 'url']);
-    expect(await count('players')).toBe(0);
-    const status = await request(app).get(`/api/v1/auth/facebook/data-deletion/${res.body.confirmation_code}`);
-    expect(status.body.data.status).toBe('completed');
+    expect(res.headers['content-type']).toMatch(/text\/html/);
+    expect(res.text).toContain(`<meta property="og:title" content="${a.player.displayName.replace('#', '#')} scored ${score.toLocaleString('en-US')} against the Snatcher – Bangla Punisher">`);
+    expect(res.text).toContain('og:image" content="http://localhost:5500/assets/og.png"');
+    expect(res.text).toContain('og:site_name');
+    expect(res.text).not.toMatch(/recovery|session|token|friend/i);
+  });
+
+  it('sends people straight to the game', async () => {
+    const { scoreId } = await savedScore();
+    const res = await request(app).get(`/api/v1/share/score/${scoreId}`).set('User-Agent', 'Mozilla/5.0 (iPhone)');
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('http://localhost:5500/?ref=share');
+  });
+
+  it('shows nothing for unknown, malformed or rejected scores', async () => {
+    const a = await loginAs(app, 'k1', 'Aaa');
+    const start = await a.agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'robber' });
+    await ageSession(db, start.body.data.sessionId);
+    const { rounds, score } = makeRun();
+    await a.agent.post(`/api/v1/game-sessions/${start.body.data.sessionId}/complete`).set(CSRF).send({ villain: 'robber', score: score + 9, rounds });
+    const rejected = (await db.query("SELECT id FROM game_scores WHERE validation_status = 'rejected'")).rows[0].id;
+    expect((await request(app).get(`/api/v1/share/score/${rejected}`).set('User-Agent', FB_BOT)).status).toBe(404);
+    expect((await request(app).get('/api/v1/share/score/3b241101-e2bb-4255-8caf-4136c566a962').set('User-Agent', FB_BOT)).status).toBe(404);
+    expect((await request(app).get('/api/v1/share/score/not-a-uuid').set('User-Agent', FB_BOT)).status).toBe(422);
   });
 });
 
@@ -561,5 +597,13 @@ describe('database integrity', () => {
     await ins();
     await expect(ins()).rejects.toThrow();
     await expect(db.query(`INSERT INTO game_scores (player_id, game_session_id, villain, score, validation_status) VALUES ($1, gen_random_uuid(), 'abuser', -1, 'accepted')`, [a.id])).rejects.toThrow();
+  });
+
+  it('enforces unique nickname#tag (case-insensitive) and the nickname/tag pair', async () => {
+    await db.query("INSERT INTO players (display_name, nickname, tag, friend_code) VALUES ('Rahim#0001', 'Rahim', 1, 'AAAAAAAA')");
+    await expect(db.query("INSERT INTO players (display_name, nickname, tag, friend_code) VALUES ('rahim#0001', 'RAHIM', 1, 'BBBBBBBB')")).rejects.toThrow();
+    await db.query("INSERT INTO players (display_name, nickname, tag, friend_code) VALUES ('Rahim#0002', 'Rahim', 2, 'CCCCCCCC')"); // same name, other tag
+    await expect(db.query("INSERT INTO players (display_name, nickname, friend_code) VALUES ('Orphan', 'Orphan', 'DDDDDDDD')")).rejects.toThrow(); // nickname without tag
+    await expect(db.query("INSERT INTO players (display_name, nickname, tag, friend_code) VALUES ('X#10000', 'Xyz', 10000, 'EEEEEEEE')")).rejects.toThrow(); // tag out of range
   });
 });

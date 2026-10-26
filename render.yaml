@@ -24,14 +24,8 @@ services:
         sync: false
       - key: API_PUBLIC_URL      # e.g. https://api.example.com
         sync: false
-      - key: FACEBOOK_APP_ID
-        sync: false
-      - key: FACEBOOK_APP_SECRET
-        sync: false
-      - key: FACEBOOK_GRAPH_API_VERSION
-        value: v25.0
       - key: COOKIE_SAMESITE
         value: lax
-      - key: SESSION_TTL_DAYS
-        value: "7"
+      - key: SESSION_TTL_DAYS   # the device cookie that remembers a player
+        value: "365"
 # Migrations are NOT run on deploy. Run them explicitly: see docs/deployment.md ("Releasing a schema change").

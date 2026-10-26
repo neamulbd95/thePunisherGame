@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { handler, validate } from '../middleware/common.js';
 import { updateProfileBody } from '../validators/schemas.js';
 import { ok } from '../utils/response.js';
+import { nicknameProblem } from '../utils/nickname.js';
+import { unprocessable } from '../utils/errors.js';
 import { toPublicPlayer } from '../repositories/players.repo.js';
 import { VILLAINS, WEAPON_IDS, villainUnlocked, weaponUnlocked, kickUnlocked } from '../utils/game-rules.js';
 
@@ -45,12 +47,14 @@ export function playerRoutes({ env, playersRepo, gamesRepo, leaderboardRepo, aut
     }),
   );
 
-  // Players may replace their (Facebook-derived) name with a nickname.
+  // Change nickname: runs the same checks as sign-up and assigns a new #tag.
   r.patch(
     '/me',
     validate({ body: updateProfileBody }),
     handler(async (req, res) => {
-      const player = await playersRepo.updateDisplayName(req.player.id, req.valid.body.displayName);
+      const problem = nicknameProblem(req.valid.body.nickname);
+      if (problem) throw unprocessable('That nickname cannot be used', [{ field: 'nickname', message: problem }]);
+      const player = await playersRepo.updateNickname(req.player.id, req.valid.body.nickname);
       ok(res, { player: toPublicPlayer(player) });
     }),
   );

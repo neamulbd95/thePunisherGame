@@ -11,9 +11,6 @@ export const testEnv = (over = {}) =>
     DATABASE_URL: 'postgres://unused',
     FRONTEND_URL: 'http://localhost:5500',
     API_PUBLIC_URL: 'http://localhost:3000',
-    FACEBOOK_APP_ID: '123456',
-    FACEBOOK_APP_SECRET: 'test-secret',
-    FACEBOOK_MOCK: 'true',
     LOG_LEVEL: 'silent',
     ...over,
   });
@@ -44,24 +41,27 @@ export async function createTestDb() {
 }
 
 export async function resetDb(db) {
-  await db.query('TRUNCATE players, data_deletion_requests CASCADE');
+  await db.query('TRUNCATE players CASCADE');
 }
 
 export const silentLogger = { info() {}, warn() {}, error() {}, debug() {} };
 
-export function buildApp(db, { env = testEnv(), facebook, rateLimits = false } = {}) {
-  return createApp({ env, db, logger: silentLogger, facebook, rateLimits });
+export function buildApp(db, { env = testEnv(), rateLimits = false } = {}) {
+  return createApp({ env, db, logger: silentLogger, rateLimits });
 }
 
 export const CSRF = { 'X-Requested-With': 'fetch', Origin: 'http://localhost:5500' };
 
-/** A logged-in supertest agent (cookie jar) for a mock Facebook user. */
-export async function loginAs(app, fbId, name = fbId, extra = '') {
+/** A new player (nickname + tag + device cookie) behind a supertest agent. `name` is the nickname. */
+export async function loginAs(app, key, name) {
   const agent = request.agent(app);
-  const res = await agent.post('/api/v1/auth/facebook').set(CSRF).send({ accessToken: `mock:${fbId}:${name}${extra}` });
-  if (res.status !== 200) throw new Error(`login failed ${res.status} ${JSON.stringify(res.body)}`);
-  return { agent, player: res.body.data.player, res };
+  const res = await agent.post('/api/v1/auth/register').set(CSRF).send({ nickname: name ?? key });
+  if (res.status !== 201) throw new Error(`register failed ${res.status} ${JSON.stringify(res.body)}`);
+  return { agent, player: res.body.data.player, res, recoveryCode: res.body.data.recoveryCode };
 }
+
+/** "Rahim#0042" -> "Rahim" */
+export const nick = (displayName) => displayName.split('#')[0];
 
 /**
  * Builds a legal run and the score the server should compute. By default it ends on lives (three misses).

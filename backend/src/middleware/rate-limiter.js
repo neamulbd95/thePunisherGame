@@ -14,10 +14,12 @@ const passthrough = (_req, _res, next) => next();
 
 /** `enabled=false` is used by tests that are not about rate limiting. */
 export function createLimiters(enabled = true) {
-  if (!enabled) return { general: passthrough, auth: passthrough, scores: passthrough, friends: passthrough };
+  if (!enabled) return { general: passthrough, auth: passthrough, signup: passthrough, scores: passthrough, friends: passthrough };
   return {
     general: make(15 * 60 * 1000, 600),
     auth: make(15 * 60 * 1000, 30),
+    // many mobile users share one IP address, so this is generous; it only stops bulk account creation
+    signup: make(60 * 60 * 1000, 30),
     scores: make(60 * 60 * 1000, 120),
     friends: make(60 * 60 * 1000, 30),
   };

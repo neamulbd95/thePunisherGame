@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import crypto from 'node:crypto';
 import { replayRun, roundScore, timeBonus, villainUnlocked, weaponUnlocked, kickUnlocked, LIMITS, STAGES, TIME_LIMIT_MS, TIME_BONUS_PER_SEC } from '../src/utils/game-rules.js';
 import { periodStart } from '../src/utils/periods.js';
 import { parseEnv } from '../src/config/env.js';
-import { createFacebookService, parseSignedRequest } from '../src/services/facebook.service.js';
-import { testEnv, makeRun, makeCleared } from './helpers.js';
+import { nicknameProblem, parseHandle, formatHandle } from '../src/utils/nickname.js';
+import { newRecoveryCode, normalizeRecoveryCode } from '../src/utils/crypto.js';
+import { makeRun, makeCleared } from './helpers.js';
 
 describe('scoring rules', () => {
   it('matches the client formula', () => {
@@ -146,104 +146,43 @@ describe('leaderboard periods (UTC)', () => {
 
 describe('environment validation', () => {
   const base = { DATABASE_URL: 'postgres://x', FRONTEND_URL: 'https://game.example.com', API_PUBLIC_URL: 'https://api.example.com' };
-  it('fails fast when Facebook credentials are missing', () => {
-    expect(() => parseEnv({ ...base })).toThrow(/FACEBOOK_APP_ID/);
-  });
-  it('refuses mock login in production', () => {
-    expect(() => parseEnv({ ...base, NODE_ENV: 'production', FACEBOOK_MOCK: 'true' })).toThrow(/FACEBOOK_MOCK/);
+  it('needs no third-party credentials', () => {
+    const env = parseEnv({ ...base, NODE_ENV: 'production' });
+    expect(env.cookieSecure).toBe(true);
+    expect(env.SESSION_TTL_DAYS).toBe(365); // the device cookie lasts a year by default
   });
   it('requires https in production', () => {
-    expect(() =>
-      parseEnv({ ...base, NODE_ENV: 'production', FACEBOOK_APP_ID: '1', FACEBOOK_APP_SECRET: 's', FRONTEND_URL: 'http://game.example.com' }),
-    ).toThrow(/https/);
+    expect(() => parseEnv({ ...base, NODE_ENV: 'production', FRONTEND_URL: 'http://game.example.com' })).toThrow(/https/);
+    expect(() => parseEnv({ ...base, NODE_ENV: 'production', API_PUBLIC_URL: 'http://api.example.com' })).toThrow(/https/);
   });
-  it('accepts a complete production config', () => {
-    const env = parseEnv({ ...base, NODE_ENV: 'production', FACEBOOK_APP_ID: '1', FACEBOOK_APP_SECRET: 's' });
-    expect(env.cookieSecure).toBe(true);
-  });
-});
-
-describe('Facebook token validation (mocked Meta)', () => {
-  const env = testEnv({ FACEBOOK_MOCK: 'false' });
-  const json = (body, status = 200) => ({ ok: status < 400, status, json: async () => body });
-
-  const service = (routes) =>
-    createFacebookService(env, {
-      fetchImpl: async (url) => {
-        const u = new URL(url);
-        const handler = routes[u.pathname.split('/').pop()];
-        if (!handler) throw new Error(`unexpected ${u.pathname}`);
-        return handler(u);
-      },
-    });
-
-  const goodDebug = { data: { is_valid: true, app_id: '123456', type: 'USER', user_id: '777', expires_at: Math.floor(Date.now() / 1000) + 3600, scopes: ['public_profile', 'user_friends'] } };
-  const goodMe = { id: '777', first_name: 'Rahim', last_name: 'Uddin', picture: { data: { url: 'https://scontent.xx.fbcdn.net/a.jpg' } } };
-
-  it('accepts a valid token and shortens the name for privacy', async () => {
-    const p = await service({ debug_token: () => json(goodDebug), me: () => json(goodMe) }).verifyAndFetchProfile('tok-tok-tok-tok');
-    expect(p).toMatchObject({ facebookUserId: '777', displayName: 'Rahim U.', grantedFriends: true });
-    expect(p.avatarUrl).toContain('fbcdn.net');
-  });
-
-  it('sends appsecret_proof and never the secret itself to /me', async () => {
-    let meUrl;
-    await service({ debug_token: () => json(goodDebug), me: (u) => (meUrl = u) && json(goodMe) }).verifyAndFetchProfile('tok-tok-tok-tok');
-    const expected = crypto.createHmac('sha256', 'test-secret').update('tok-tok-tok-tok').digest('hex');
-    expect(meUrl.searchParams.get('appsecret_proof')).toBe(expected);
-    expect(meUrl.toString()).not.toContain('test-secret');
-  });
-
-  it.each([
-    ['invalid token', { data: { ...goodDebug.data, is_valid: false } }],
-    ['token for another app', { data: { ...goodDebug.data, app_id: '999' } }],
-    ['expired token', { data: { ...goodDebug.data, expires_at: 100 } }],
-    ['page token', { data: { ...goodDebug.data, type: 'PAGE' } }],
-  ])('rejects %s', async (_n, dbg) => {
-    await expect(service({ debug_token: () => json(dbg), me: () => json(goodMe) }).verifyAndFetchProfile('tok-tok-tok-tok')).rejects.toMatchObject({ status: 401 });
-  });
-
-  it('rejects an identity that does not match debug_token', async () => {
-    await expect(
-      service({ debug_token: () => json(goodDebug), me: () => json({ ...goodMe, id: '888' }) }).verifyAndFetchProfile('tok-tok-tok-tok'),
-    ).rejects.toMatchObject({ status: 401 });
-  });
-
-  it('maps a Meta 5xx to 503 and a network failure to 503', async () => {
-    await expect(service({ debug_token: () => json({}, 500) }).verifyAndFetchProfile('tok-tok-tok-tok')).rejects.toMatchObject({ status: 503 });
-    const down = createFacebookService(env, { fetchImpl: async () => { throw new Error('boom'); } });
-    await expect(down.verifyAndFetchProfile('tok-tok-tok-tok')).rejects.toMatchObject({ status: 503 });
-  });
-
-  it('only keeps avatars hosted by Meta', async () => {
-    const p = await service({ debug_token: () => json(goodDebug), me: () => json({ ...goodMe, picture: { data: { url: 'https://evil.example/x.jpg' } } }) }).verifyAndFetchProfile('tok-tok-tok-tok');
-    expect(p.avatarUrl).toBeNull();
-  });
-
-  it('pages through /me/friends', async () => {
-    let calls = 0;
-    const svc = service({
-      friends: () => (calls++ === 0
-        ? json({ data: [{ id: '1' }, { id: '2' }], paging: { cursors: { after: 'c1' }, next: 'x' } })
-        : json({ data: [{ id: '3' }], paging: {} })),
-    });
-    expect(await svc.fetchAppFriends('tok-tok-tok-tok')).toEqual(['1', '2', '3']);
+  it('fails fast on a missing database url or a bad origin', () => {
+    expect(() => parseEnv({ ...base, DATABASE_URL: '' })).toThrow(/DATABASE_URL/);
+    expect(() => parseEnv({ ...base, FRONTEND_URL: 'not a url' })).toThrow(/invalid URL/);
   });
 });
 
-describe('signed_request (data deletion callback)', () => {
-  const sign = (payload, secret) => {
-    const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-    const sig = crypto.createHmac('sha256', secret).update(body).digest('base64url');
-    return `${sig}.${body}`;
-  };
-  it('accepts a correctly signed request', () => {
-    expect(parseSignedRequest(sign({ user_id: '42' }, 's3'), 's3').user_id).toBe('42');
+describe('nicknames and handles', () => {
+  it('accepts ordinary names in any script', () => {
+    for (const ok of ['Rahim', 'নীরব_প্রতিবাদ', 'Punisher', 'bangla-hero', 'Nusrat99', 'আমি', 'x_y']) expect(nicknameProblem(ok), ok).toBeNull();
   });
-  it('rejects a forged signature', () => {
-    expect(() => parseSignedRequest(sign({ user_id: '42' }, 'other'), 's3')).toThrow();
+  it('rejects bad length, characters, reserved names and clearly abusive terms (including leetspeak)', () => {
+    for (const bad of ['ab', 'a'.repeat(17), 'two words', 'a#b', '<b>', 'Admin', 'adm1n', 'Moderator', 'BanglaPunisher', 'FUCK', 'sh1t', 'xX_f.u.c.k_Xx', 'Rapist', 'HITLER']) {
+      expect(nicknameProblem(bad), bad).toBeTruthy();
+    }
   });
-  it('rejects malformed input', () => {
-    expect(() => parseSignedRequest('garbage', 's3')).toThrow();
+  it('does not block innocent words that merely contain letters of a blocked term', () => {
+    for (const ok of ['Shiitake', 'Assam', 'Classic', 'Dickens']) expect(nicknameProblem(ok), ok).toBeNull();
+  });
+  it('formats and parses handles', () => {
+    expect(formatHandle('Rahim', 42)).toBe('Rahim#0042');
+    expect(parseHandle('Rahim#0042')).toEqual({ nickname: 'Rahim', tag: 42 });
+    expect(parseHandle(' নীরব#7 ')).toEqual({ nickname: 'নীরব', tag: 7 });
+    for (const bad of ['Rahim', 'Rahim#', '#0042', 'Rahim#12345', 'Rahim#abcd']) expect(parseHandle(bad), bad).toBeNull();
+  });
+  it('recovery codes are 100-bit, readable, and forgiving to type', () => {
+    const code = newRecoveryCode();
+    expect(code).toMatch(/^([A-Z2-9]{4}-){4}[A-Z2-9]{4}$/);
+    expect(new Set(Array.from({ length: 200 }, newRecoveryCode)).size).toBe(200);
+    expect(normalizeRecoveryCode(code.toLowerCase().replace(/-/g, ' '))).toBe(code.replace(/-/g, ''));
   });
 });
