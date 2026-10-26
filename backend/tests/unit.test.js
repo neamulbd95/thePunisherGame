@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import crypto from 'node:crypto';
-import { replayRun, roundScore, timeBonus, LIMITS, STAGES, TIME_LIMIT_MS, TIME_BONUS_PER_SEC } from '../src/utils/game-rules.js';
+import { replayRun, roundScore, timeBonus, villainUnlocked, weaponUnlocked, kickUnlocked, LIMITS, STAGES, TIME_LIMIT_MS, TIME_BONUS_PER_SEC } from '../src/utils/game-rules.js';
 import { periodStart } from '../src/utils/periods.js';
 import { parseEnv } from '../src/config/env.js';
 import { createFacebookService, parseSignedRequest } from '../src/services/facebook.service.js';
@@ -66,8 +66,8 @@ describe('stages and the clock', () => {
   });
 
   it('rejects a bonus the server clock contradicts', () => {
-    const run = makeCleared({ timeLeftMs: 50_000 }); // claims the game took 10 s ...
-    expect(replay(run, 10_500).ok).toBe(true); //        ... which fits 10 s of wall clock
+    const run = makeCleared({ timeLeftMs: 40_000 }); // claims the game took 20 s ...
+    expect(replay(run, 20_500).ok).toBe(true); //        ... which fits 20 s of wall clock
     expect(replay(run, 45_000).reason).toBe('time_mismatch'); // but not 45 s
   });
 
@@ -97,6 +97,33 @@ describe('stages and the clock', () => {
     // a run that was already over (three misses) cannot also be a timeout
     const dead = makeRun(spec);
     expect(replayRun({ rounds: dead.rounds, claimedScore: dead.score, end: 'timeout', durationMs: 90_000 }).reason).toBe('game_not_finished');
+  });
+
+  it('weapons add their multiplier, but the kick ignores the weapon', () => {
+    const base = { force: 1, grade: 'GOOD', combo: 0 };
+    expect(roundScore({ ...base, spot: 'L', weapon: 'hand' })).toBe(100);
+    expect(roundScore({ ...base, spot: 'L', weapon: 'sandal' })).toBe(105);
+    expect(roundScore({ ...base, spot: 'L', weapon: 'pan' })).toBe(125);
+    expect(roundScore({ ...base, spot: 'B', weapon: 'pan' })).toBe(200); // kick x2.0, no weapon bonus
+  });
+
+  it('the kick needs its unlock', () => {
+    const { rounds, score } = makeRun([['B', 'GOOD', 0.5]]);
+    expect(replayRun({ rounds, claimedScore: score, durationMs: 20_000, end: 'lives' }).reason).toBe('locked_area');
+    expect(replayRun({ rounds, claimedScore: score, durationMs: 20_000, end: 'lives', kickAllowed: true }).ok).toBe(true);
+  });
+
+  it('unlock thresholds', () => {
+    const p = (total, per = {}) => ({ total, per: { abuser: 0, robber: 0, rapist: 0, ...per } });
+    expect(villainUnlocked(p(0), 'robber')).toBe(true);
+    expect(villainUnlocked(p(1999), 'abuser')).toBe(false);
+    expect(villainUnlocked(p(2000), 'abuser')).toBe(true);
+    expect(villainUnlocked(p(5000), 'rapist')).toBe(true);
+    expect(weaponUnlocked(p(0), 'hand')).toBe(true);
+    expect(weaponUnlocked(p(999), 'sandal')).toBe(false);
+    expect(weaponUnlocked(p(15000), 'pan')).toBe(true);
+    expect(kickUnlocked(p(9999, { abuser: 1499 }), 'abuser')).toBe(false);
+    expect(kickUnlocked(p(1500, { abuser: 1500 }), 'abuser')).toBe(true);
   });
 
   it('rejects unknown end reasons', () => {

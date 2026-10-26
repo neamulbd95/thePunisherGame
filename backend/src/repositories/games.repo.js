@@ -1,9 +1,9 @@
 export function gamesRepo(db) {
   return {
-    async createSession(playerId, villain) {
+    async createSession(playerId, villain, weapon) {
       const { rows } = await db.query(
-        `INSERT INTO game_sessions (player_id, villain) VALUES ($1, $2) RETURNING id, villain, started_at, status`,
-        [playerId, villain],
+        `INSERT INTO game_sessions (player_id, villain, weapon) VALUES ($1, $2, $3) RETURNING id, villain, weapon, started_at, status`,
+        [playerId, villain, weapon],
       );
       return rows[0];
     },
@@ -11,7 +11,7 @@ export function gamesRepo(db) {
     /** Locks the row so two concurrent submissions for one session serialise. Must run inside tx. */
     async lockSession(id, q) {
       const { rows } = await q.query(
-        `SELECT id, player_id, villain, started_at, status,
+        `SELECT id, player_id, villain, weapon, started_at, status,
                 (extract(epoch FROM (now() - started_at)) * 1000)::bigint AS elapsed_ms
            FROM game_sessions WHERE id = $1 FOR UPDATE`,
         [id],
@@ -35,6 +35,18 @@ export function gamesRepo(db) {
         [s.playerId, s.sessionId, s.villain, s.score, s.rounds, s.perfects, s.durationMs, s.status, s.reason ?? null],
       );
       return rows[0];
+    },
+
+    /** Unlock progress: total of all accepted scores, and the part earned against each villain. */
+    async progress(playerId, q = db) {
+      const { rows } = await q.query(
+        `SELECT villain, COALESCE(sum(score), 0)::bigint AS pts
+           FROM game_scores WHERE player_id = $1 AND validation_status = 'accepted' GROUP BY villain`,
+        [playerId],
+      );
+      const per = { abuser: 0, robber: 0, rapist: 0 };
+      for (const r of rows) per[r.villain] = Number(r.pts);
+      return { total: per.abuser + per.robber + per.rapist, per };
     },
 
     async expireStaleSessions(olderThanHours = 6) {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { VILLAINS, END_REASONS, STAGES, MAX_MISSES, TIME_LIMIT_MS } from '../utils/game-rules.js';
+import { VILLAINS, WEAPON_IDS, END_REASONS, STAGES, MAX_MISSES, TIME_LIMIT_MS } from '../utils/game-rules.js';
 import { PERIODS } from '../utils/periods.js';
 
 export const facebookLoginBody = z.strictObject({
@@ -10,10 +10,11 @@ export const facebookSyncBody = facebookLoginBody;
 
 export const startGameBody = z.strictObject({
   villain: z.enum(VILLAINS),
+  weapon: z.enum(WEAPON_IDS).default('hand'),
 });
 
 const round = z.strictObject({
-  spot: z.enum(['L', 'R', 'S']),
+  spot: z.enum(['L', 'R', 'S', 'B']),
   grade: z.enum(['PERFECT', 'GREAT', 'GOOD', 'MISS']),
   force: z.number().min(0).max(1).optional(),
 });

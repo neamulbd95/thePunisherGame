@@ -10,7 +10,7 @@ export function gameRoutes({ scoreService, requireAuth, limiters }) {
   r.post(
     '/',
     validate({ body: startGameBody }),
-    handler(async (req, res) => created(res, await scoreService.startGame(req.player.id, req.valid.body.villain))),
+    handler(async (req, res) => created(res, await scoreService.startGame(req.player.id, req.valid.body.villain, req.valid.body.weapon))),
   );
 
   r.post(

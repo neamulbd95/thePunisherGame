@@ -3,7 +3,7 @@ import request from 'supertest';
 import { parseEnv } from '../src/config/env.js';
 import { createApp } from '../src/app.js';
 import { runMigrations } from '../src/utils/migrate.js';
-import { roundScore, timeBonus } from '../src/utils/game-rules.js';
+import { roundScore, timeBonus, STAGES } from '../src/utils/game-rules.js';
 
 export const testEnv = (over = {}) =>
   parseEnv({
@@ -67,7 +67,7 @@ export async function loginAs(app, fbId, name = fbId, extra = '') {
  * Builds a legal run and the score the server should compute. By default it ends on lives (three misses).
  * Spec rows are [spot, grade, force] or [spot, 'MISS'].
  */
-export function makeRun(spec = [['L', 'GOOD', 0.8], ['S', 'PERFECT', 0.9], ['R', 'GREAT', 0.5]], { lives = true } = {}) {
+export function makeRun(spec = [['L', 'GOOD', 0.8], ['S', 'PERFECT', 0.9], ['R', 'GREAT', 0.5]], { lives = true, weapon = 'hand' } = {}) {
   const rounds = [];
   let combo = 0;
   let score = 0;
@@ -78,17 +78,17 @@ export function makeRun(spec = [['L', 'GOOD', 0.8], ['S', 'PERFECT', 0.9], ['R',
       continue;
     }
     rounds.push({ spot, grade, force });
-    score += roundScore({ force, grade, spot, combo });
+    score += roundScore({ force, grade, spot, combo, weapon });
     combo++;
   }
   if (lives) for (let i = 0; i < 3; i++) rounds.push({ spot: 'L', grade: 'MISS' });
   return { rounds, score, end: lives ? 'lives' : 'timeout', timeLeftMs: 0 };
 }
 
-/** A run that clears all ten stages with the given time left (score includes the time bonus). */
-export function makeCleared({ spec, timeLeftMs = 20_000 } = {}) {
-  const rows = spec ?? Array.from({ length: 10 }, (_, i) => [['L', 'R', 'S'][i % 3], i % 4 === 0 ? 'GREAT' : 'GOOD', 0.7]);
-  const run = makeRun(rows, { lives: false });
+/** A run that clears all stages with the given time left (score includes the time bonus). */
+export function makeCleared({ spec, timeLeftMs = 20_000, weapon = 'hand' } = {}) {
+  const rows = spec ?? Array.from({ length: STAGES }, (_, i) => [['L', 'R', 'S'][i % 3], i % 4 === 0 ? 'GREAT' : 'GOOD', 0.7]);
+  const run = makeRun(rows, { lives: false, weapon });
   return { ...run, end: 'cleared', timeLeftMs, score: run.score + timeBonus(timeLeftMs) };
 }
 
@@ -100,10 +100,19 @@ export const ageSession = (db, id) =>
 export const setElapsed = (db, id, ms) =>
   db.query(`UPDATE game_sessions SET started_at = now() - ($2 || ' milliseconds')::interval WHERE id = $1`, [id, String(ms)]);
 
+/** Gives a player verified score on a villain, which unlocks villains, weapons and the kick (no gameplay needed). */
+export async function grantScore(db, playerId, villain, score) {
+  const s = (await db.query(`INSERT INTO game_sessions (player_id, villain, status, completed_at) VALUES ($1, $2, 'completed', now()) RETURNING id`, [playerId, villain])).rows[0].id;
+  await db.query(
+    `INSERT INTO game_scores (player_id, game_session_id, villain, score, rounds, perfects, duration_ms, validation_status) VALUES ($1, $2, $3, $4, 3, 0, 30000, 'accepted')`,
+    [playerId, s, villain, score],
+  );
+}
+
 /** Plays a whole accepted game (ends on lives unless `run` is given) for an agent. */
-export async function playGame(db, agent, { villain = 'abuser', spec, run, elapsedMs } = {}) {
-  const start = await agent.post('/api/v1/game-sessions').set(CSRF).send({ villain });
-  const r = run ?? makeRun(spec);
+export async function playGame(db, agent, { villain = 'robber', weapon = 'hand', spec, run, elapsedMs } = {}) {
+  const start = await agent.post('/api/v1/game-sessions').set(CSRF).send({ villain, weapon });
+  const r = run ?? makeRun(spec, { weapon });
   if (elapsedMs) await setElapsed(db, start.body.data.sessionId, elapsedMs);
   else await ageSession(db, start.body.data.sessionId);
   const done = await agent

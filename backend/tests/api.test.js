@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import crypto from 'node:crypto';
-import { createTestDb, resetDb, buildApp, loginAs, playGame, makeRun, makeCleared, ageSession, testEnv, CSRF } from './helpers.js';
+import { createTestDb, resetDb, buildApp, loginAs, playGame, makeRun, makeCleared, ageSession, grantScore, testEnv, CSRF } from './helpers.js';
 
 let db;
 let app;
@@ -165,7 +165,7 @@ describe('game sessions & score submission', () => {
     const { agent } = await loginAs(app, 'fb-1');
     const { start, score } = await playGame(db, agent);
     const { rounds } = makeRun();
-    const again = await agent.post(`/api/v1/game-sessions/${start.body.data.sessionId}/complete`).set(CSRF).send({ villain: 'abuser', score, rounds });
+    const again = await agent.post(`/api/v1/game-sessions/${start.body.data.sessionId}/complete`).set(CSRF).send({ villain: 'robber', score, rounds });
     expect(again.status).toBe(409);
     expect(again.body.error.code).toBe('ALREADY_SUBMITTED');
     expect(await count('game_scores')).toBe(1);
@@ -173,11 +173,11 @@ describe('game sessions & score submission', () => {
 
   it('serialises concurrent double submits into a single score', async () => {
     const { agent } = await loginAs(app, 'fb-1');
-    const start = await agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'abuser' });
+    const start = await agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'robber' });
     const id = start.body.data.sessionId;
     await ageSession(db, id);
     const { rounds, score } = makeRun();
-    const send = () => agent.post(`/api/v1/game-sessions/${id}/complete`).set(CSRF).send({ villain: 'abuser', score, rounds });
+    const send = () => agent.post(`/api/v1/game-sessions/${id}/complete`).set(CSRF).send({ villain: 'robber', score, rounds });
     const results = await Promise.all([send(), send()]);
     expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
     expect(await count('game_scores')).toBe(1);
@@ -186,50 +186,50 @@ describe('game sessions & score submission', () => {
   it("hides other players' sessions", async () => {
     const a = await loginAs(app, 'fb-a');
     const b = await loginAs(app, 'fb-b');
-    const start = await a.agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'abuser' });
+    const start = await a.agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'robber' });
     const { rounds, score } = makeRun();
     await ageSession(db, start.body.data.sessionId);
-    const steal = await b.agent.post(`/api/v1/game-sessions/${start.body.data.sessionId}/complete`).set(CSRF).send({ villain: 'abuser', score, rounds });
+    const steal = await b.agent.post(`/api/v1/game-sessions/${start.body.data.sessionId}/complete`).set(CSRF).send({ villain: 'robber', score, rounds });
     expect(steal.status).toBe(404);
     expect(await count('game_scores')).toBe(0);
   });
 
   it('rejects tampered scores, logs a rejected row and keeps them off the leaderboard', async () => {
     const { agent } = await loginAs(app, 'fb-1');
-    const start = await agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'abuser' });
+    const start = await agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'robber' });
     const id = start.body.data.sessionId;
     await ageSession(db, id);
     const { rounds, score } = makeRun();
-    const res = await agent.post(`/api/v1/game-sessions/${id}/complete`).set(CSRF).send({ villain: 'abuser', score: score + 5000, rounds });
+    const res = await agent.post(`/api/v1/game-sessions/${id}/complete`).set(CSRF).send({ villain: 'robber', score: score + 5000, rounds });
     expect(res.status).toBe(422);
     expect(res.body.error.details.reason).toBe('score_mismatch');
     const row = (await db.query('SELECT validation_status, rejection_reason, score FROM game_scores')).rows[0];
     expect(row).toMatchObject({ validation_status: 'rejected', rejection_reason: 'score_mismatch', score: 0 });
     expect((await request(app).get('/api/v1/leaderboards/global')).body.data.players).toHaveLength(0);
     // A rejected session cannot be retried with a corrected payload.
-    const retry = await agent.post(`/api/v1/game-sessions/${id}/complete`).set(CSRF).send({ villain: 'abuser', score, rounds });
+    const retry = await agent.post(`/api/v1/game-sessions/${id}/complete`).set(CSRF).send({ villain: 'robber', score, rounds });
     expect(retry.status).toBe(409);
   });
 
   it('rejects impossibly fast runs and villain mismatches', async () => {
     const { agent } = await loginAs(app, 'fb-1');
     const { rounds, score } = makeRun();
-    const fast = await agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'abuser' });
-    const r1 = await agent.post(`/api/v1/game-sessions/${fast.body.data.sessionId}/complete`).set(CSRF).send({ villain: 'abuser', score, rounds });
+    const fast = await agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'robber' });
+    const r1 = await agent.post(`/api/v1/game-sessions/${fast.body.data.sessionId}/complete`).set(CSRF).send({ villain: 'robber', score, rounds });
     expect(r1.body.error.details.reason).toBe('too_fast');
 
     const other = await agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'robber' });
     await ageSession(db, other.body.data.sessionId);
-    const r2 = await agent.post(`/api/v1/game-sessions/${other.body.data.sessionId}/complete`).set(CSRF).send({ villain: 'abuser', score, rounds });
+    const r2 = await agent.post(`/api/v1/game-sessions/${other.body.data.sessionId}/complete`).set(CSRF).send({ villain: 'rapist', score, rounds });
     expect(r2.body.error.details.reason).toBe('villain_mismatch');
   });
 
   it('validates payload shape and ignores any client-supplied identity', async () => {
     const { agent } = await loginAs(app, 'fb-1');
     expect((await agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'nobody' })).status).toBe(422);
-    const start = await agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'abuser' });
+    const start = await agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'robber' });
     const { rounds, score } = makeRun();
-    const res = await agent.post(`/api/v1/game-sessions/${start.body.data.sessionId}/complete`).set(CSRF).send({ villain: 'abuser', score, rounds, playerId: 'someone-else' });
+    const res = await agent.post(`/api/v1/game-sessions/${start.body.data.sessionId}/complete`).set(CSRF).send({ villain: 'robber', score, rounds, playerId: 'someone-else' });
     expect(res.status).toBe(422);
     expect((await agent.post('/api/v1/game-sessions/not-a-uuid/complete').set(CSRF).send({})).status).toBe(422);
   });
@@ -243,7 +243,7 @@ describe('stages, clock and time bonus', () => {
     expect(done.status).toBe(200);
     expect(done.body.data.score).toBe(run.score);
     const row = (await db.query('SELECT score, rounds, validation_status FROM game_scores')).rows[0];
-    expect(row).toMatchObject({ score: run.score, rounds: 10, validation_status: 'accepted' });
+    expect(row).toMatchObject({ score: run.score, rounds: 15, validation_status: 'accepted' });
   });
 
   it('rejects a forged time bonus on a cleared game', async () => {
@@ -267,9 +267,79 @@ describe('stages, clock and time bonus', () => {
     const run = makeRun([['L', 'GOOD', 0.5]], { lives: false });
     const early = await playGame(db, agent, { run, elapsedMs: 15_000 });
     expect(early.done.body.error.details.reason).toBe('timeout_too_early');
-    const start = await agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'abuser' });
-    const bad = await agent.post(`/api/v1/game-sessions/${start.body.data.sessionId}/complete`).set(CSRF).send({ villain: 'abuser', score: 0, rounds: [], end: 'quit' });
+    const start = await agent.post('/api/v1/game-sessions').set(CSRF).send({ villain: 'robber' });
+    const bad = await agent.post(`/api/v1/game-sessions/${start.body.data.sessionId}/complete`).set(CSRF).send({ villain: 'robber', score: 0, rounds: [], end: 'quit' });
     expect(bad.status).toBe(422);
+  });
+});
+
+describe('unlocks: villains, weapons and the bottom kick', () => {
+  const start = (agent, body) => agent.post('/api/v1/game-sessions').set(CSRF).send(body);
+
+  it('starts with only the Snatcher and the bare hand', async () => {
+    const { agent } = await loginAs(app, 'fb-1');
+    expect((await start(agent, { villain: 'robber' })).status).toBe(201);
+    const locked = await start(agent, { villain: 'abuser' });
+    expect(locked.status).toBe(403);
+    expect(locked.body.error.code).toBe('LOCKED');
+    expect((await start(agent, { villain: 'rapist' })).status).toBe(403);
+    expect((await start(agent, { villain: 'robber', weapon: 'sandal' })).status).toBe(403);
+    expect((await start(agent, { villain: 'robber', weapon: 'chainsaw' })).status).toBe(422);
+  });
+
+  it('unlocks follow the verified total score', async () => {
+    const { agent, player } = await loginAs(app, 'fb-1');
+    await grantScore(db, player.id, 'robber', 2000);
+    expect((await start(agent, { villain: 'abuser', weapon: 'sandal' })).status).toBe(201); // total 2000: Abuser and sandal
+    expect((await start(agent, { villain: 'robber', weapon: 'broom' })).status).toBe(403); // broom needs 3000
+    expect((await start(agent, { villain: 'rapist' })).status).toBe(403); // needs 5000
+    expect((await start(agent, { villain: 'robber', weapon: 'bamboo' })).status).toBe(403); // needs 6000
+    await grantScore(db, player.id, 'abuser', 4000); // total 6000
+    expect((await start(agent, { villain: 'rapist', weapon: 'bamboo' })).status).toBe(201);
+  });
+
+  it('exposes progress for the client', async () => {
+    const { agent, player } = await loginAs(app, 'fb-1');
+    await grantScore(db, player.id, 'robber', 1600);
+    const res = await agent.get('/api/v1/players/me/progress');
+    expect(res.body.data).toMatchObject({
+      totalScore: 1600,
+      villainScores: { robber: 1600, abuser: 0, rapist: 0 },
+      unlocked: { villains: ['robber'], weapons: ['hand', 'sandal'], kick: ['robber'] },
+    });
+    expect((await request(app).get('/api/v1/players/me/progress')).status).toBe(401);
+  });
+
+  it('scores with the weapon the session was started with', async () => {
+    const { agent, player } = await loginAs(app, 'fb-1');
+    await grantScore(db, player.id, 'robber', 1000);
+    const run = makeRun([['L', 'GOOD', 1], ['R', 'GOOD', 1]], { weapon: 'sandal' });
+    const { done } = await playGame(db, agent, { weapon: 'sandal', run });
+    expect(done.status).toBe(200);
+    // the same log is NOT valid for a session started with the bare hand (the client lied about its weapon)
+    const lie = await playGame(db, agent, { weapon: 'hand', run });
+    expect(lie.done.status).toBe(422);
+    expect(lie.done.body.error.details.reason).toBe('score_mismatch');
+  });
+
+  it('the bottom kick is rejected until that villain has 1,500 points', async () => {
+    const { agent, player } = await loginAs(app, 'fb-1');
+    const kick = makeRun([['B', 'GOOD', 0.8], ['L', 'GOOD', 0.8]]);
+    const early = await playGame(db, agent, { run: kick });
+    expect(early.done.status).toBe(422);
+    expect(early.done.body.error.details.reason).toBe('locked_area');
+    await grantScore(db, player.id, 'robber', 1500);
+    const ok = await playGame(db, agent, { run: kick });
+    expect(ok.done.status).toBe(200);
+    expect(ok.done.body.data.score).toBe(kick.score);
+  });
+
+  it('the kick unlock is per villain', async () => {
+    const { agent, player } = await loginAs(app, 'fb-1');
+    await grantScore(db, player.id, 'robber', 2600); // unlocks the Abuser, but his own kick needs 1,500 points against him
+    const kick = makeRun([['B', 'GOOD', 0.8]]);
+    const res = await playGame(db, agent, { villain: 'abuser', run: kick });
+    expect(res.done.body.error.details.reason).toBe('locked_area');
   });
 });
 
@@ -301,6 +371,7 @@ describe('global leaderboard', () => {
   it('paginates and filters by villain', async () => {
     const a = await loginAs(app, 'fb-a', 'Aaa');
     const b = await loginAs(app, 'fb-b', 'Bbb');
+    await grantScore(db, a.player.id, 'rapist', 2500); // unlocks the Child Abuser without touching the robber board
     await playGame(db, a.agent, { villain: 'abuser', spec: [['S', 'PERFECT', 1]] });
     await playGame(db, b.agent, { villain: 'robber', spec: [['L', 'GOOD', 0.5]] });
     const page2 = await request(app).get('/api/v1/leaderboards/global?limit=1&offset=1');

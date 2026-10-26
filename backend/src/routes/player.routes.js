@@ -3,6 +3,7 @@ import { handler, validate } from '../middleware/common.js';
 import { updateProfileBody } from '../validators/schemas.js';
 import { ok } from '../utils/response.js';
 import { toPublicPlayer } from '../repositories/players.repo.js';
+import { VILLAINS, WEAPON_IDS, villainUnlocked, weaponUnlocked, kickUnlocked } from '../utils/game-rules.js';
 
 export function playerRoutes({ env, playersRepo, gamesRepo, leaderboardRepo, authService, requireAuth }) {
   const r = Router();
@@ -23,6 +24,23 @@ export function playerRoutes({ env, playersRepo, gamesRepo, leaderboardRepo, aut
         totalPerfects: stats.total_perfects,
         globalRank: rank.my_rank ?? null,
         rankedPlayers: rank.total,
+      });
+    }),
+  );
+
+  // What the player has unlocked, computed from verified scores.
+  r.get(
+    '/me/progress',
+    handler(async (req, res) => {
+      const p = await gamesRepo.progress(req.player.id);
+      ok(res, {
+        totalScore: p.total,
+        villainScores: p.per,
+        unlocked: {
+          villains: VILLAINS.filter((v) => villainUnlocked(p, v)),
+          weapons: WEAPON_IDS.filter((w) => weaponUnlocked(p, w)),
+          kick: VILLAINS.filter((v) => kickUnlocked(p, v)),
+        },
       });
     }),
   );

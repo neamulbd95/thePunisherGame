@@ -9,12 +9,31 @@
  *   - runs out of time ('timeout'). No time bonus unless cleared.
  */
 export const VILLAINS = ['abuser', 'robber', 'rapist'];
-export const SPOTS = ['L', 'R', 'S'];
+export const SPOTS = ['L', 'R', 'S', 'B']; // left cheek, right cheek, the villain's special spot, bottom (kick)
 export const GRADE_MULT = { PERFECT: 1.5, GREAT: 1.2, GOOD: 1 };
-export const SPOT_MULT = { L: 1, R: 1, S: 1.6 };
+export const SPOT_MULT = { L: 1, R: 1, S: 1.6, B: 2 };
+
+// Weapons: chosen before a game; unlock at a TOTAL score and add a small score multiplier. The bottom kick uses no weapon.
+export const WEAPONS = {
+  hand: { mult: 1, unlock: 0 },
+  sandal: { mult: 1.05, unlock: 1000 },
+  broom: { mult: 1.1, unlock: 3000 },
+  bamboo: { mult: 1.15, unlock: 6000 },
+  belan: { mult: 1.2, unlock: 10000 },
+  pan: { mult: 1.25, unlock: 15000 },
+};
+export const WEAPON_IDS = Object.keys(WEAPONS);
+// Villains unlock at a TOTAL score; the bottom kick unlocks per villain, at the score earned against that villain.
+export const VILLAIN_UNLOCK = { robber: 0, abuser: 2000, rapist: 5000 };
+export const KICK_UNLOCK = 1500;
+
+/** progress = { total, per: { abuser, robber, rapist } } built from accepted scores. */
+export const villainUnlocked = (progress, villain) => progress.total >= VILLAIN_UNLOCK[villain];
+export const weaponUnlocked = (progress, weapon) => progress.total >= WEAPONS[weapon].unlock;
+export const kickUnlocked = (progress, villain) => (progress.per[villain] ?? 0) >= KICK_UNLOCK;
 export const MAX_MISSES = 3;
 export const MIN_FORCE = 0.05;
-export const STAGES = 10;
+export const STAGES = 15;
 export const TIME_LIMIT_MS = 60_000;
 export const TIME_BONUS_PER_SEC = 20;
 export const END_REASONS = ['lives', 'cleared', 'timeout'];
@@ -36,9 +55,10 @@ export const LIMITS = {
   minUsedPerRoundMs: 900,
 };
 
-export function roundScore({ force, grade, spot, combo }) {
+export function roundScore({ force, grade, spot, combo, weapon = 'hand' }) {
   // Same operation order as the client so floating point results are identical.
-  return Math.round(100 * force * GRADE_MULT[grade] * SPOT_MULT[spot] * (1 + combo * 0.15));
+  const weaponMult = spot === 'B' ? 1 : WEAPONS[weapon].mult;
+  return Math.round(100 * force * GRADE_MULT[grade] * SPOT_MULT[spot] * weaponMult * (1 + combo * 0.15));
 }
 
 export const timeBonus = (timeLeftMs) => Math.floor(timeLeftMs / 1000) * TIME_BONUS_PER_SEC;
@@ -47,7 +67,7 @@ export const timeBonus = (timeLeftMs) => Math.floor(timeLeftMs / 1000) * TIME_BO
  * Replays a run. Returns { ok:true, score, perfects, rounds, bonus } or { ok:false, reason }.
  * `claimedScore`, `rounds`, `end` and `timeLeftMs` come from the untrusted client; `durationMs` is measured by the server.
  */
-export function replayRun({ rounds, claimedScore, durationMs, end = 'lives', timeLeftMs = 0 }) {
+export function replayRun({ rounds, claimedScore, durationMs, end = 'lives', timeLeftMs = 0, weapon = 'hand', kickAllowed = false }) {
   if (!Array.isArray(rounds)) return { ok: false, reason: 'bad_rounds' };
   if (!END_REASONS.includes(end)) return { ok: false, reason: 'bad_end' };
   // At most STAGES hits and MAX_MISSES-1 earlier misses plus the final one.
@@ -63,6 +83,7 @@ export function replayRun({ rounds, claimedScore, durationMs, end = 'lives', tim
   for (const r of rounds) {
     if (misses >= MAX_MISSES || hits >= STAGES) return { ok: false, reason: 'rounds_after_game_over' };
     if (!SPOTS.includes(r.spot)) return { ok: false, reason: 'bad_spot' };
+    if (r.spot === 'B' && !kickAllowed) return { ok: false, reason: 'locked_area' };
     if (r.grade === 'MISS') {
       combo = 0;
       misses++;
@@ -71,7 +92,7 @@ export function replayRun({ rounds, claimedScore, durationMs, end = 'lives', tim
     }
     if (!(r.grade in GRADE_MULT)) return { ok: false, reason: 'bad_grade' };
     if (!Number.isFinite(r.force) || r.force < MIN_FORCE || r.force > 1) return { ok: false, reason: 'bad_force' };
-    score += roundScore({ force: r.force, grade: r.grade, spot: r.spot, combo });
+    score += roundScore({ force: r.force, grade: r.grade, spot: r.spot, combo, weapon });
     combo++;
     hits++;
     if (r.grade === 'PERFECT') {

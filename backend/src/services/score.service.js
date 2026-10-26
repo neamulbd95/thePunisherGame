@@ -1,12 +1,16 @@
-import { replayRun } from '../utils/game-rules.js';
-import { notFound, conflict, unprocessable } from '../utils/errors.js';
+import { replayRun, villainUnlocked, weaponUnlocked, kickUnlocked } from '../utils/game-rules.js';
+import { notFound, conflict, unprocessable, forbidden } from '../utils/errors.js';
 
 export function createScoreService({ db, logger, gamesRepo, leaderboardRepo }) {
   return {
-    async startGame(playerId, villain) {
+    async startGame(playerId, villain, weapon) {
+      // Unlocks are enforced here, from verified scores, not from anything the browser claims.
+      const progress = await gamesRepo.progress(playerId);
+      if (!villainUnlocked(progress, villain)) throw forbidden('This villain is still locked', 'LOCKED');
+      if (!weaponUnlocked(progress, weapon)) throw forbidden('This weapon is still locked', 'LOCKED');
       await gamesRepo.expireStaleSessions().catch(() => {});
-      const s = await gamesRepo.createSession(playerId, villain);
-      return { sessionId: s.id, villain: s.villain, startedAt: s.started_at };
+      const s = await gamesRepo.createSession(playerId, villain, weapon);
+      return { sessionId: s.id, villain: s.villain, weapon: s.weapon, startedAt: s.started_at };
     },
 
     /**
@@ -27,7 +31,16 @@ export function createScoreService({ db, logger, gamesRepo, leaderboardRepo }) {
           reason = 'villain_mismatch';
         } else {
           const rounds = body.rounds.map((r) => ({ spot: r.spot, grade: r.grade, force: r.force ?? 0 }));
-          result = replayRun({ rounds, claimedScore: body.score, durationMs, end: body.end, timeLeftMs: body.timeLeftMs });
+          const progress = await gamesRepo.progress(playerId, t); // before this game is counted
+          result = replayRun({
+            rounds,
+            claimedScore: body.score,
+            durationMs,
+            end: body.end,
+            timeLeftMs: body.timeLeftMs,
+            weapon: session.weapon,
+            kickAllowed: kickUnlocked(progress, session.villain),
+          });
           if (!result.ok) reason = result.reason;
         }
 
