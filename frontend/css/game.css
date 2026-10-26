@@ -153,3 +153,30 @@ body.menu .overlay{padding:12px clamp(12px,4vw,40px)}
 #ovBody::-webkit-scrollbar{display:none}
 .ov-foot{flex:none;width:100%;display:flex;justify-content:center;margin-bottom:auto}
 .ov-foot:empty{display:none}
+
+/* ---- short screens: compact helpline box, so the content above it keeps room ---- */
+@media (max-height:720px){
+  .helpbox{padding:6px 10px 8px;animation:none}
+  .helpbox .hb-title{font-size:.8rem;margin-bottom:4px}
+  .helpbox .hb-bn{display:inline;margin-left:6px;font-size:.95em}
+  .helpbox .hb-num{font-size:1.3rem;min-width:3.4ch;padding:1px 9px}
+  .helpbox .hb-lbl{font-size:.72rem}
+  .helpbox .hb-lbl small{display:none}
+  .helpbox ul{gap:6px}
+}
+/* short and wide (a laptop with a small window): numbers and labels side by side in one row */
+@media (max-height:720px) and (min-width:520px){
+  .helpbox ul{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 22px}
+  .helpbox li{display:flex;align-items:center;gap:8px}
+  .helpbox .hb-lbl{text-align:left;font-size:.85rem}
+}
+/* when the screen body can be scrolled, fade its bottom edge so cut-off content looks scrollable, not broken */
+#ovBody.more{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 32px),transparent)}
+/* short screens: tighter game-over / menu content so the buttons are not cut off */
+@media (max-height:720px){
+  .overlay h2{font-size:1.8rem}
+  .overlay .big{font-size:2.6rem}
+  .protest-line{display:none}
+  .overlay .ovbtn{padding:8px 18px;font-size:.95rem}
+  .unlocks{padding:4px 10px}.unlocks p{font-size:.82rem}
+}

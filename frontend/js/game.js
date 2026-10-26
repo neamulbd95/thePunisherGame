@@ -219,6 +219,12 @@ const helpBox=list=>`<aside class="helpbox" aria-label="Emergency helplines">
 
 // ---------- overlay ----------
 const ov=$('overlay'),ovTitle=$('ovTitle'),ovBody=$('ovBody'),ovFoot=$('ovFoot'); // ovFoot is pinned under the (scrollable) body: the helplines are never scrolled out of sight
+// The menu body scrolls without a scroll bar. While there is more below, fade its bottom edge (class .more) so cut-off content reads as scrollable.
+const updateMore=()=>ovBody.classList.toggle('more',ovBody.scrollHeight-ovBody.scrollTop-ovBody.clientHeight>4);
+ovBody.addEventListener('scroll',updateMore,{passive:true});
+addEventListener('resize',updateMore);
+new MutationObserver(updateMore).observe(ovBody,{childList:true,subtree:true});
+new ResizeObserver(updateMore).observe(ovBody);
 const controlsEl=document.querySelector('.controls');
 // While a menu screen (landing, intro, game over) is showing, it takes the whole area below the header and the
 // hit-spot / charge controls give their space back. While playing, the canvas is fitted to the free area.
